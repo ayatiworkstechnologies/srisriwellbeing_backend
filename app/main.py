@@ -9,6 +9,7 @@ from app.core.database import engine
 from app.models.base import Base
 from app import models  # noqa: F401
 from app.modules.users.router import router as users_router
+from app.api.endpoints import audit_logs
 
 
 @asynccontextmanager
@@ -56,3 +57,4 @@ async def root() -> dict:
     }
 
 app.include_router(users_router)
+app.include_router(audit_logs.router)

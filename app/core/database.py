@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from sqlalchemy.orm import DeclarativeBase
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -23,6 +24,10 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+
+class BaseModel(DeclarativeBase):
+    pass
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
