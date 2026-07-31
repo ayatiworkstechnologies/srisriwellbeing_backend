@@ -1,12 +1,25 @@
 from datetime import datetime
+
 from pydantic import (
     BaseModel,
-    EmailStr,
     ConfigDict,
+    EmailStr,
     Field,
     field_validator,
     model_validator,
 )
+
+
+class RoleResponse(BaseModel):
+    id: int | None = None
+    name: str
+
+
+class PermissionResponse(BaseModel):
+    id: int | None = None
+    code: str
+    name: str | None = None
+
 
 class UserProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -21,6 +34,12 @@ class UserProfileResponse(BaseModel):
     last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class AuthenticatedUserResponse(UserProfileResponse):
+    roles: list[str] = []
+    permissions: list[str] = []
+
 
 class UserProfileUpdateRequest(BaseModel):
     full_name: str | None = Field(
@@ -66,7 +85,8 @@ class UserProfileUpdateRequest(BaseModel):
             return None
 
         return normalized_value
-    
+
+
 class AccountStatusUpdateRequest(BaseModel):
     reason: str | None = Field(
         default=None,
@@ -101,7 +121,7 @@ class RegisterRequest(BaseModel):
     @field_validator("full_name")
     @classmethod
     def clean_full_name(cls, value: str) -> str:
-        cleaned_value = value.strip()
+        cleaned_value = " ".join(value.strip().split())
 
         if len(cleaned_value) < 2:
             raise ValueError(
@@ -112,8 +132,8 @@ class RegisterRequest(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def clean_email(cls, value: str) -> str:
-        return value.lower().strip()
+    def clean_email(cls, value: EmailStr) -> str:
+        return str(value).lower().strip()
 
     @field_validator("phone")
     @classmethod
@@ -121,7 +141,7 @@ class RegisterRequest(BaseModel):
         cls,
         value: str | None,
     ) -> str | None:
-        if value is None or value.strip() == "":
+        if value is None or not value.strip():
             return None
 
         cleaned_phone = (
@@ -168,6 +188,11 @@ class LoginRequest(BaseModel):
         max_length=128,
     )
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).lower().strip()
+
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(
@@ -182,14 +207,13 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str = Field(
-        min_length=10,
-    )
-
-
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).lower().strip()
 
 
 class ResetPasswordRequest(BaseModel):
