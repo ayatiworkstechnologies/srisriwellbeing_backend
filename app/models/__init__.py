@@ -1,4 +1,3 @@
-from app.modules.auth.model import UserSession
 from app.modules.auth.password_reset_model import PasswordResetToken
 from app.modules.rbac.association import RolePermission, UserRole
 from app.modules.rbac.model import Permission, Role
@@ -13,3 +12,4 @@ __all__ = [
     "Role",
     "Permission",
 ]
+

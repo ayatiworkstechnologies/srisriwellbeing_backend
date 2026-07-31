@@ -10,7 +10,7 @@ from app.models.base import Base
 from app import models  # noqa: F401
 from app.modules.users.router import router as users_router
 from app.api.endpoints import audit_logs
-
+from app.modules.patients.router import router as patients_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     yield
 
     await engine.dispose()
+
 
 
 app = FastAPI(
@@ -58,3 +59,8 @@ async def root() -> dict:
 
 app.include_router(users_router)
 app.include_router(audit_logs.router)
+
+app.include_router(
+    patients_router,
+    prefix="/api",
+)
