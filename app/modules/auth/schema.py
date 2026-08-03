@@ -118,15 +118,18 @@ class RegisterRequest(BaseModel):
         max_length=128,
     )
 
+    role_id: int = Field(
+        gt=0,
+        description="Active role to assign to the new user",
+    )
+
     @field_validator("full_name")
     @classmethod
     def clean_full_name(cls, value: str) -> str:
         cleaned_value = " ".join(value.strip().split())
 
         if len(cleaned_value) < 2:
-            raise ValueError(
-                "Full name must contain at least 2 characters"
-            )
+            raise ValueError("Full name must contain at least 2 characters")
 
         return cleaned_value
 
@@ -153,29 +156,21 @@ class RegisterRequest(BaseModel):
         )
 
         number_part = (
-            cleaned_phone[1:]
-            if cleaned_phone.startswith("+")
-            else cleaned_phone
+            cleaned_phone[1:] if cleaned_phone.startswith("+") else cleaned_phone
         )
 
         if not number_part.isdigit():
-            raise ValueError(
-                "Phone number must contain only digits"
-            )
+            raise ValueError("Phone number must contain only digits")
 
         if len(number_part) < 10:
-            raise ValueError(
-                "Phone number must contain at least 10 digits"
-            )
+            raise ValueError("Phone number must contain at least 10 digits")
 
         return cleaned_phone
 
     @model_validator(mode="after")
     def validate_passwords(self):
         if self.password != self.confirm_password:
-            raise ValueError(
-                "Password and confirm password do not match"
-            )
+            raise ValueError("Password and confirm password do not match")
 
         return self
 
@@ -186,6 +181,11 @@ class LoginRequest(BaseModel):
     password: str = Field(
         min_length=8,
         max_length=128,
+    )
+
+    role_id: int = Field(
+        gt=0,
+        description="Assigned role to use for this login session",
     )
 
     @field_validator("email")
@@ -234,9 +234,7 @@ class ResetPasswordRequest(BaseModel):
     @model_validator(mode="after")
     def validate_passwords(self):
         if self.new_password != self.confirm_new_password:
-            raise ValueError(
-                "New password and confirm password do not match"
-            )
+            raise ValueError("New password and confirm password do not match")
 
         return self
 
@@ -260,13 +258,9 @@ class ChangePasswordRequest(BaseModel):
     @model_validator(mode="after")
     def validate_passwords(self):
         if self.new_password != self.confirm_new_password:
-            raise ValueError(
-                "New password and confirm password do not match"
-            )
+            raise ValueError("New password and confirm password do not match")
 
         if self.current_password == self.new_password:
-            raise ValueError(
-                "New password must be different from current password"
-            )
+            raise ValueError("New password must be different from current password")
 
         return self

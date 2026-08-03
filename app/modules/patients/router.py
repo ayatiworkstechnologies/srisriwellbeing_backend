@@ -1,6 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Path,
+    Query,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -19,18 +25,14 @@ from app.modules.patients.schemas import (
 from app.modules.patients.service import PatientService
 
 
-router = APIRouter(
-    prefix="/patients",
-    tags=["Patients"],
-)
+router = APIRouter()
 
 
-# 1. Create patient
 @router.post(
     "",
     response_model=PatientCreateResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="1. Create Patient",
+    summary="Create Patient",
 )
 async def create_patient(
     payload: PatientCreate,
@@ -44,12 +46,11 @@ async def create_patient(
     )
 
 
-# 2. List patients
 @router.get(
     "",
     response_model=PatientListResponse,
     status_code=status.HTTP_200_OK,
-    summary="2. List Patients",
+    summary="List Patients",
 )
 async def list_patients(
     search: Optional[str] = Query(
@@ -70,7 +71,7 @@ async def list_patients(
         le=100,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    _current_user=Depends(get_current_user),
 ):
     return await PatientService.list_patients(
         db=db,
@@ -85,17 +86,37 @@ async def list_patients(
     )
 
 
-# 3. Get one patient
+# Static route must stay before /{patient_id}
+@router.post(
+    "/duplicate-check",
+    response_model=PatientDuplicateCheckResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Check Duplicate Patient",
+)
+async def check_patient_duplicates(
+    payload: PatientDuplicateCheckRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    return await PatientService.check_duplicates(
+        db=db,
+        payload=payload,
+    )
+
+
 @router.get(
     "/{patient_id}",
     response_model=PatientResponse,
     status_code=status.HTTP_200_OK,
-    summary="3. Get Patient",
+    summary="Get Patient",
 )
 async def get_patient(
-    patient_id: int,
+    patient_id: int = Path(
+        ...,
+        gt=0,
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    _current_user=Depends(get_current_user),
 ):
     return await PatientService.get_patient(
         db=db,
@@ -103,16 +124,18 @@ async def get_patient(
     )
 
 
-# 4. Update patient
 @router.patch(
     "/{patient_id}",
     response_model=PatientResponse,
     status_code=status.HTTP_200_OK,
-    summary="4. Update Patient",
+    summary="Update Patient",
 )
 async def update_patient(
-    patient_id: int,
     payload: PatientUpdate,
+    patient_id: int = Path(
+        ...,
+        gt=0,
+    ),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -124,33 +147,19 @@ async def update_patient(
     )
 
 
-# 5. Duplicate check
-@router.post(
-    "/duplicate-check",
-    response_model=PatientDuplicateCheckResponse,
-    status_code=status.HTTP_200_OK,
-    summary="6. Check Duplicate Patient",
-)
-async def check_patient_duplicates(
-    payload: PatientDuplicateCheckRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return await PatientService.check_duplicates(
-        db=db,
-        payload=payload,
-    )
-
 @router.delete(
     "/{patient_id}",
     response_model=PatientDeleteResponse,
     status_code=status.HTTP_200_OK,
-    summary="5. Delete Patient",
+    summary="Delete Patient",
 )
 async def delete_patient(
-    patient_id: int,
+    patient_id: int = Path(
+        ...,
+        gt=0,
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    _current_user=Depends(get_current_user),
 ):
     return await PatientService.delete_patient(
         db=db,

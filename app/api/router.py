@@ -1,22 +1,53 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import auth, health, rbac
+from app.api.endpoints.auth import router as auth_router
+from app.api.endpoints.health import router as health_router
+from app.api.endpoints.rbac import router as rbac_router
+from app.modules.patients.router import router as patients_router
+from app.modules.patients.portal.auth_router import (
+    router as patient_auth_router,
+)
+from app.modules.patients.portal.dashboard_router import (
+    router as patient_dashboard_router,
+)
 
 
 api_router = APIRouter()
 
+
 api_router.include_router(
-    health.router,
+    health_router,
     prefix="/health",
     tags=["Health"],
 )
 
 api_router.include_router(
-    auth.router,
+    auth_router,
     prefix="/auth",
     tags=["Authentication"],
 )
 
 api_router.include_router(
-    rbac.router,
+    rbac_router,
+    prefix="/rbac",
+    tags=["RBAC"],
+)
+
+# Include staff-side patient CRUD only once
+api_router.include_router(
+    patients_router,
+    prefix="/patients",
+    tags=["Patients"],
+)
+
+api_router.include_router(
+    patient_auth_router,
+    prefix="/patient-auth",
+    tags=["Patient Authentication"],
+)
+
+api_router.include_router(
+    patient_dashboard_router,
+    prefix="/patient",
+    tags=["Patient Portal"],
 )

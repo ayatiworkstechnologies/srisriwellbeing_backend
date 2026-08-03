@@ -68,10 +68,7 @@ class AuthService:
                     phone=phone,
                 )
 
-                if (
-                    existing_user is not None
-                    and existing_user.id != current_user.id
-                ):
+                if existing_user is not None and existing_user.id != current_user.id:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Phone number is already in use",
@@ -202,11 +199,9 @@ class AuthService:
                 user=user,
             )
 
-            revoked_sessions = (
-                await AuthRepository.revoke_all_user_sessions(
-                    db=db,
-                    user_id=user.id,
-                )
+            revoked_sessions = await AuthRepository.revoke_all_user_sessions(
+                db=db,
+                user_id=user.id,
             )
 
             await db.commit()
@@ -239,6 +234,17 @@ class AuthService:
     ) -> dict:
         email = payload.email.lower().strip()
         phone = payload.phone.strip() if payload.phone else None
+
+        role = await RBACRepository.get_role_by_id(
+            db=db,
+            role_id=payload.role_id,
+        )
+
+        if role is None or not role.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role not found or inactive",
+            )
 
         if payload.password != payload.confirm_password:
             raise HTTPException(
@@ -282,9 +288,7 @@ class AuthService:
             full_name=payload.full_name.strip(),
             email=email,
             phone=phone,
-            password_hash=PasswordService.hash_password(
-                payload.password
-            ),
+            password_hash=PasswordService.hash_password(payload.password),
             status=UserStatus.ACTIVE.value,
             is_active=True,
             is_verified=False,
@@ -294,6 +298,12 @@ class AuthService:
             created_user = await UserRepository.create(
                 db=db,
                 user=user,
+            )
+
+            await RBACRepository.replace_user_roles(
+                db=db,
+                user_id=created_user.id,
+                role_ids=[role.id],
             )
 
             await db.commit()
@@ -322,6 +332,12 @@ class AuthService:
                 "status": created_user.status,
                 "is_active": created_user.is_active,
                 "is_verified": created_user.is_verified,
+                "role_id": role.id,
+                "role": {
+                    "id": role.id,
+                    "name": role.name,
+                    "display_name": role.display_name,
+                },
             },
         }
 
@@ -334,8 +350,10 @@ class AuthService:
         db: AsyncSession,
         email: str,
         password: str,
+        role_id: int | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
+        allowed_roles: list[str] | None = None,
     ) -> dict:
         normalized_email = email.lower().strip()
 
@@ -350,7 +368,7 @@ class AuthService:
                 detail="Invalid email or password",
             )
 
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
 
         # Check temporary account lock.
         if (
@@ -364,12 +382,8 @@ class AuthService:
             )
 
         # Automatically unlock after lock duration expires.
-        if (
-            user.status == UserStatus.LOCKED.value
-            and (
-                user.locked_until is None
-                or user.locked_until <= current_time
-            )
+        if user.status == UserStatus.LOCKED.value and (
+            user.locked_until is None or user.locked_until <= current_time
         ):
             user.status = UserStatus.ACTIVE.value
             user.locked_until = None
@@ -385,9 +399,7 @@ class AuthService:
 
             if user.failed_login_attempts >= 5:
                 user.status = UserStatus.LOCKED.value
-                user.locked_until = (
-                    current_time + timedelta(minutes=15)
-                )
+                user.locked_until = current_time + timedelta(minutes=15)
 
             try:
                 await db.commit()
@@ -431,26 +443,39 @@ class AuthService:
             user_id=user.id,
         )
 
-        # Load active permissions inherited from all active roles.
-        user_permissions = await RBACRepository.get_user_permissions(
-            db=db,
-            user_id=user.id,
-        )
+        normalized_allowed_roles = {
+            role_name.strip().lower()
+            for role_name in (allowed_roles or [])
+            if role_name and role_name.strip()
+        }
 
-        # Remove duplicate roles while preserving order.
-        roles = list(
-            dict.fromkeys(
-                role.name
+        selected_role = next(
+            (
+                role
                 for role in user_roles
                 if role.is_active
-            )
+                and (role_id is None or role.id == role_id)
+                and (
+                    not normalized_allowed_roles
+                    or role.name.strip().lower() in normalized_allowed_roles
+                )
+            ),
+            None,
         )
 
-        # Remove duplicate permissions while preserving order.
+        if selected_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Selected role is not assigned to this user",
+            )
+
+        roles = [selected_role.name]
+
+        # Scope this session to the selected role only.
         permissions = list(
             dict.fromkeys(
                 permission.code
-                for permission in user_permissions
+                for permission in selected_role.permissions
                 if permission.is_active
             )
         )
@@ -463,10 +488,7 @@ class AuthService:
             user_agent=user_agent,
             ip_address=ip_address,
             expires_at=(
-                current_time
-                + timedelta(
-                    days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-                )
+                current_time + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
             ),
             is_active=True,
         )
@@ -481,6 +503,7 @@ class AuthService:
                 user_id=user.id,
                 email=user.email,
                 session_id=created_session.id,
+                role_id=selected_role.id,
                 roles=roles,
                 permissions=permissions,
             )
@@ -488,11 +511,10 @@ class AuthService:
             refresh_token = TokenService.create_refresh_token(
                 user_id=user.id,
                 session_id=created_session.id,
+                role_id=selected_role.id,
             )
 
-            created_session.refresh_token_hash = (
-                TokenService.hash_token(refresh_token)
-            )
+            created_session.refresh_token_hash = TokenService.hash_token(refresh_token)
 
             user.failed_login_attempts = 0
             user.locked_until = None
@@ -520,9 +542,7 @@ class AuthService:
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer",
-                "expires_in": (
-                    settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                ),
+                "expires_in": (settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
                 "user": {
                     "id": user.id,
                     "full_name": user.full_name,
@@ -534,6 +554,12 @@ class AuthService:
                     "last_login_at": user.last_login_at,
                 },
                 "roles": roles,
+                "role_id": selected_role.id,
+                "role": {
+                    "id": selected_role.id,
+                    "name": selected_role.name,
+                    "display_name": selected_role.display_name,
+                },
                 "permissions": permissions,
             },
         }
@@ -559,6 +585,7 @@ class AuthService:
         token_type = payload.get("token_type")
         user_id_value = payload.get("sub")
         session_id_value = payload.get("session_id")
+        role_id_value = payload.get("role_id")
 
         if token_type != "refresh":
             raise HTTPException(
@@ -566,7 +593,7 @@ class AuthService:
                 detail="Invalid token type",
             )
 
-        if user_id_value is None or session_id_value is None:
+        if user_id_value is None or session_id_value is None or role_id_value is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token payload",
@@ -575,6 +602,7 @@ class AuthService:
         try:
             user_id = int(user_id_value)
             session_id = int(session_id_value)
+            role_id = int(role_id_value)
 
         except (TypeError, ValueError) as exc:
             raise HTTPException(
@@ -621,37 +649,38 @@ class AuthService:
             db=db,
             user_id=user_id,
         )
-        user_roles = await RBACRepository.get_user_roles(
-            db=db,
-            user_id=user.id,
-        )
-
-        user_permissions = await RBACRepository.get_user_permissions(
-            db=db,
-            user_id=user.id,
-        )
-
-        roles = list(
-            dict.fromkeys(
-                role.name
-                for role in user_roles
-                if role.is_active
-            )
-        )
-
-        permissions = list(
-            dict.fromkeys(
-                permission.code
-                for permission in user_permissions
-                if permission.is_active
-            )
-        )
 
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User account not found",
             )
+
+        user_roles = await RBACRepository.get_user_roles(
+            db=db,
+            user_id=user.id,
+        )
+
+        selected_role = next(
+            (role for role in user_roles if role.id == role_id and role.is_active),
+            None,
+        )
+
+        if selected_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Session role is no longer assigned to this user",
+            )
+
+        roles = [selected_role.name]
+
+        permissions = list(
+            dict.fromkeys(
+                permission.code
+                for permission in selected_role.permissions
+                if permission.is_active
+            )
+        )
 
         if not user.is_active:
             raise HTTPException(
@@ -669,22 +698,21 @@ class AuthService:
             user_id=user.id,
             email=user.email,
             session_id=session.id,
+            role_id=selected_role.id,
+            roles=roles,
+            permissions=permissions,
         )
 
         new_refresh_token = TokenService.create_refresh_token(
             user_id=user.id,
             session_id=session.id,
+            role_id=selected_role.id,
         )
 
-        new_refresh_token_hash = TokenService.hash_token(
-            new_refresh_token
-        )
+        new_refresh_token_hash = TokenService.hash_token(new_refresh_token)
 
-        new_expiry = (
-            datetime.utcnow()
-            + timedelta(
-                days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-            )
+        new_expiry = datetime.now() + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
 
         try:
@@ -708,9 +736,8 @@ class AuthService:
                 "access_token": new_access_token,
                 "refresh_token": new_refresh_token,
                 "token_type": "bearer",
-                "expires_in": (
-                    settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                ),
+                "expires_in": (settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+                "role_id": selected_role.id,
             },
         }
 
@@ -734,10 +761,7 @@ class AuthService:
                 detail="Session not found",
             )
 
-        if (
-            not session.is_active
-            or session.revoked_at is not None
-        ):
+        if not session.is_active or session.revoked_at is not None:
             return {
                 "success": True,
                 "message": "Session already logged out",
@@ -770,11 +794,9 @@ class AuthService:
         user_id: int,
     ) -> dict:
         try:
-            revoked_count = (
-                await AuthRepository.revoke_all_user_sessions(
-                    db=db,
-                    user_id=user_id,
-                )
+            revoked_count = await AuthRepository.revoke_all_user_sessions(
+                db=db,
+                user_id=user_id,
             )
 
             await db.commit()
@@ -818,9 +840,7 @@ class AuthService:
                     "expires_at": session.expires_at,
                     "revoked_at": session.revoked_at,
                     "is_active": session.is_active,
-                    "is_current": (
-                        session.id == current_session_id
-                    ),
+                    "is_current": (session.id == current_session_id),
                 }
             )
 
@@ -864,10 +884,7 @@ class AuthService:
                 detail="Use /auth/logout to revoke the current session",
             )
 
-        if (
-            not session.is_active
-            or session.revoked_at is not None
-        ):
+        if not session.is_active or session.revoked_at is not None:
             return {
                 "success": True,
                 "message": "Session is already revoked",
@@ -904,11 +921,9 @@ class AuthService:
         current_password: str,
         new_password: str,
     ) -> dict:
-        current_password_is_valid = (
-            PasswordService.verify_password(
-                plain_password=current_password,
-                hashed_password=user.password_hash,
-            )
+        current_password_is_valid = PasswordService.verify_password(
+            plain_password=current_password,
+            hashed_password=user.password_hash,
         )
 
         if not current_password_is_valid:
@@ -917,20 +932,15 @@ class AuthService:
                 detail="Current password is incorrect",
             )
 
-        current_and_new_are_same = (
-            PasswordService.verify_password(
-                plain_password=new_password,
-                hashed_password=user.password_hash,
-            )
+        current_and_new_are_same = PasswordService.verify_password(
+            plain_password=new_password,
+            hashed_password=user.password_hash,
         )
 
         if current_and_new_are_same:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    "New password must be different "
-                    "from current password"
-                ),
+                detail=("New password must be different " "from current password"),
             )
 
         try:
@@ -942,9 +952,7 @@ class AuthService:
                 detail=str(exc),
             ) from exc
 
-        new_password_hash = PasswordService.hash_password(
-            new_password
-        )
+        new_password_hash = PasswordService.hash_password(new_password)
 
         try:
             await UserRepository.update_password(
@@ -953,11 +961,9 @@ class AuthService:
                 password_hash=new_password_hash,
             )
 
-            revoked_sessions = (
-                await AuthRepository.revoke_all_user_sessions(
-                    db=db,
-                    user_id=user.id,
-                )
+            revoked_sessions = await AuthRepository.revoke_all_user_sessions(
+                db=db,
+                user_id=user.id,
             )
 
             await db.commit()
@@ -968,10 +974,7 @@ class AuthService:
 
         return {
             "success": True,
-            "message": (
-                "Password changed successfully. "
-                "Please log in again."
-            ),
+            "message": ("Password changed successfully. " "Please log in again."),
             "data": {
                 "revoked_sessions": revoked_sessions,
             },
@@ -1008,23 +1011,14 @@ class AuthService:
         if not user.is_active:
             return generic_response
 
-        plain_reset_token = (
-            TokenService.create_password_reset_token()
-        )
+        plain_reset_token = TokenService.create_password_reset_token()
 
-        reset_token_hash = (
-            TokenService.hash_password_reset_token(
-                plain_reset_token
-            )
-        )
+        reset_token_hash = TokenService.hash_password_reset_token(plain_reset_token)
 
         reset_token = PasswordResetToken(
             user_id=user.id,
             token_hash=reset_token_hash,
-            expires_at=(
-                datetime.utcnow()
-                + timedelta(minutes=30)
-            ),
+            expires_at=(datetime.now() + timedelta(minutes=30)),
             is_used=False,
         )
 
@@ -1052,7 +1046,6 @@ class AuthService:
                 "If an account exists for this email, "
                 "password reset instructions have been generated."
             ),
-
             # Only for local development/testing.
             # Remove this after email integration is completed.
             "development_data": {
@@ -1088,26 +1081,17 @@ class AuthService:
                 detail=str(exc),
             ) from exc
 
-        reset_token_hash = (
-            TokenService.hash_password_reset_token(
-                cleaned_token
-            )
-        )
+        reset_token_hash = TokenService.hash_password_reset_token(cleaned_token)
 
-        reset_token = (
-            await PasswordResetRepository.get_valid_by_hash(
-                db=db,
-                token_hash=reset_token_hash,
-            )
+        reset_token = await PasswordResetRepository.get_valid_by_hash(
+            db=db,
+            token_hash=reset_token_hash,
         )
 
         if reset_token is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Reset token is invalid, expired, "
-                    "or already used"
-                ),
+                detail=("Reset token is invalid, expired, " "or already used"),
             )
 
         user = await UserRepository.get_by_id(
@@ -1127,25 +1111,18 @@ class AuthService:
                 detail="User account is inactive",
             )
 
-        same_as_current_password = (
-            PasswordService.verify_password(
-                plain_password=new_password,
-                hashed_password=user.password_hash,
-            )
+        same_as_current_password = PasswordService.verify_password(
+            plain_password=new_password,
+            hashed_password=user.password_hash,
         )
 
         if same_as_current_password:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    "New password must be different "
-                    "from the current password"
-                ),
+                detail=("New password must be different " "from the current password"),
             )
 
-        new_password_hash = (
-            PasswordService.hash_password(new_password)
-        )
+        new_password_hash = PasswordService.hash_password(new_password)
 
         try:
             await UserRepository.update_password(
@@ -1159,11 +1136,9 @@ class AuthService:
                 reset_token=reset_token,
             )
 
-            revoked_sessions = (
-                await AuthRepository.revoke_all_user_sessions(
-                    db=db,
-                    user_id=user.id,
-                )
+            revoked_sessions = await AuthRepository.revoke_all_user_sessions(
+                db=db,
+                user_id=user.id,
             )
 
             await db.commit()
@@ -1174,10 +1149,7 @@ class AuthService:
 
         return {
             "success": True,
-            "message": (
-                "Password reset successfully. "
-                "Please log in again."
-            ),
+            "message": ("Password reset successfully. " "Please log in again."),
             "data": {
                 "revoked_sessions": revoked_sessions,
             },

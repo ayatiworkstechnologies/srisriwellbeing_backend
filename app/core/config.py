@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +32,28 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug_mode(cls, value):
+        if isinstance(value, str):
+            normalized_value = value.strip().lower()
+
+            if normalized_value in {
+                "release",
+                "production",
+                "prod",
+            }:
+                return False
+
+            if normalized_value in {
+                "debug",
+                "development",
+                "dev",
+            }:
+                return True
+
+        return value
 
     @property
     def allowed_origins_list(self) -> list[str]:

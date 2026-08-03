@@ -22,8 +22,6 @@ from app.modules.patients.constants import (
     AddressType,
     DocumentType,
     DuplicateMatchStatus,
-    Gender,
-    IdentifierType,
     PatientStatus,
 )
 
@@ -38,11 +36,32 @@ class Patient(Base):
     )
 
     patient_code: Mapped[str] = mapped_column(
-    String(10),
-    nullable=False,
-    unique=True,
-    index=True,
-)
+        String(30),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    blood_group: Mapped[Optional[str]] = mapped_column(
+        String(10),
+        nullable=True,
+    )
+
+    portal_user = relationship(
+        "User",
+        foreign_keys=[user_id],
+        lazy="selectin",
+    )
 
     first_name: Mapped[str] = mapped_column(
         String(100),

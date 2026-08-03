@@ -10,7 +10,6 @@ from app.modules.rbac.schema import (
     RoleCreateRequest,
 )
 from app.modules.rbac.service import RBACService
-from app.modules.users.model import User
 
 
 router = APIRouter(
@@ -38,6 +37,7 @@ async def test_users_view_permission(
 # =========================================================
 # ROLE PERMISSION ASSIGNMENT
 # =========================================================
+
 
 @router.post(
     "/roles/{role_id}/permissions",
@@ -191,18 +191,3 @@ async def get_permission_by_id(
         db=db,
         permission_id=permission_id,
     )
-
-@router.get("/test/users-view")
-async def test_users_view_permission(
-    current_user: User = Depends(
-        require_permission("users.view")
-    ),
-) -> dict:
-    return {
-        "success": True,
-        "message": "Permission granted",
-        "data": {
-            "user_id": current_user.id,
-            "email": current_user.email,
-        },
-    }

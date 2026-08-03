@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status,  Path
+from fastapi import APIRouter, Depends, Request, status, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -23,7 +23,6 @@ from app.modules.users.model import User
 
 
 router = APIRouter()
-
 
 
 @router.post(
@@ -59,6 +58,7 @@ async def login(
         db=db,
         email=payload.email,
         password=payload.password,
+        role_id=payload.role_id,
         user_agent=request.headers.get("user-agent"),
         ip_address=ip_address,
     )
@@ -84,6 +84,7 @@ async def get_me(
         },
     }
 
+
 @router.post("/refresh")
 async def refresh_token(
     payload: RefreshTokenRequest,
@@ -93,6 +94,7 @@ async def refresh_token(
         db=db,
         refresh_token=payload.refresh_token,
     )
+
 
 @router.post("/logout")
 async def logout(
@@ -104,6 +106,7 @@ async def logout(
         session_id=auth_context.session_id,
     )
 
+
 @router.post("/logout-all")
 async def logout_all(
     auth_context: CurrentAuthContext,
@@ -113,6 +116,7 @@ async def logout_all(
         db=db,
         user_id=auth_context.user.id,
     )
+
 
 @router.get("/sessions")
 async def get_sessions(
@@ -124,6 +128,7 @@ async def get_sessions(
         user_id=auth_context.user.id,
         current_session_id=auth_context.session_id,
     )
+
 
 @router.delete("/sessions/{session_id}")
 async def revoke_session(
@@ -138,6 +143,7 @@ async def revoke_session(
         current_session_id=auth_context.session_id,
     )
 
+
 @router.post("/change-password")
 async def change_password(
     payload: ChangePasswordRequest,
@@ -151,6 +157,7 @@ async def change_password(
         new_password=payload.new_password,
     )
 
+
 @router.post("/forgot-password")
 async def forgot_password(
     payload: ForgotPasswordRequest,
@@ -160,6 +167,7 @@ async def forgot_password(
         db=db,
         email=payload.email,
     )
+
 
 @router.post("/reset-password")
 async def reset_password(
@@ -172,6 +180,7 @@ async def reset_password(
         new_password=payload.new_password,
     )
 
+
 @router.patch("/users/{user_id}/activate")
 async def activate_account(
     user_id: int = Path(gt=0),
@@ -182,6 +191,7 @@ async def activate_account(
         user_id=user_id,
     )
 
+
 @router.patch("/users/{user_id}/deactivate")
 async def deactivate_account(
     user_id: int = Path(gt=0),
@@ -191,6 +201,7 @@ async def deactivate_account(
         db=db,
         user_id=user_id,
     )
+
 
 @router.patch("/profile")
 async def update_profile(
