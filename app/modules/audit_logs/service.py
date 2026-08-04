@@ -30,11 +30,7 @@ class AuditLogService:
             action=action,
             module=module,
             entity_type=entity_type,
-            entity_id=(
-                str(entity_id)
-                if entity_id is not None
-                else None
-            ),
+            entity_id=(str(entity_id) if entity_id is not None else None),
             description=description,
             old_values=old_values,
             new_values=new_values,
@@ -86,5 +82,3 @@ class AuditLogService:
             date_from=date_from,
             date_to=date_to,
         )
-
-    

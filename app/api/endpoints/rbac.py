@@ -1,38 +1,22 @@
 from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.permissions import require_permission
 
 from app.core.database import get_db
+from app.core.permissions import require_permission
 from app.modules.rbac.schema import (
     AssignPermissionsRequest,
     AssignRolesRequest,
     PermissionCreateRequest,
+    PermissionUpdateRequest,
     RoleCreateRequest,
+    RoleUpdateRequest,
 )
 from app.modules.rbac.service import RBACService
 
-
 router = APIRouter(
-    prefix="/rbac",
     tags=["RBAC"],
 )
-
-
-@router.get(
-    "/test/users-view",
-    summary="Test users.view permission",
-)
-async def test_users_view_permission(
-    current_user=Depends(require_permission("users.view")),
-) -> dict:
-    return {
-        "success": True,
-        "message": "You have users.view permission",
-        "data": {
-            "user_id": current_user.id,
-            "email": current_user.email,
-        },
-    }
+RBAC_MANAGEMENT = [Depends(require_permission("rbac.manage"))]
 
 # =========================================================
 # ROLE PERMISSION ASSIGNMENT
@@ -42,6 +26,7 @@ async def test_users_view_permission(
 @router.post(
     "/roles/{role_id}/permissions",
     summary="Assign permissions to role",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def assign_permissions_to_role(
     payload: AssignPermissionsRequest,
@@ -59,9 +44,11 @@ async def assign_permissions_to_role(
 # USER ROLE ASSIGNMENT
 # =========================================================
 
+
 @router.post(
     "/users/{user_id}/roles",
     summary="Assign roles to user",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def assign_roles_to_user(
     payload: AssignRolesRequest,
@@ -78,6 +65,7 @@ async def assign_roles_to_user(
 @router.get(
     "/users/{user_id}/roles",
     summary="Get user roles",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def get_user_roles(
     user_id: int = Path(gt=0),
@@ -92,6 +80,7 @@ async def get_user_roles(
 @router.delete(
     "/users/{user_id}/roles/{role_id}",
     summary="Remove role from user",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def remove_role_from_user(
     user_id: int = Path(gt=0),
@@ -109,9 +98,11 @@ async def remove_role_from_user(
 # ROLES
 # =========================================================
 
+
 @router.post(
     "/roles",
     summary="Create role",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def create_role(
     payload: RoleCreateRequest,
@@ -138,6 +129,7 @@ async def get_roles(
 @router.get(
     "/roles/{role_id}",
     summary="Get role by ID",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def get_role_by_id(
     role_id: int = Path(gt=0),
@@ -149,13 +141,42 @@ async def get_role_by_id(
     )
 
 
+@router.patch(
+    "/roles/{role_id}",
+    summary="Update role",
+    dependencies=RBAC_MANAGEMENT,
+)
+async def update_role(
+    payload: RoleUpdateRequest,
+    role_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await RBACService.update_role(
+        db=db, role_id=role_id, payload=payload
+    )
+
+
+@router.delete(
+    "/roles/{role_id}",
+    summary="Delete role",
+    dependencies=RBAC_MANAGEMENT,
+)
+async def delete_role(
+    role_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await RBACService.delete_role(db=db, role_id=role_id)
+
+
 # =========================================================
 # PERMISSIONS
 # =========================================================
 
+
 @router.post(
     "/permissions",
     summary="Create permission",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def create_permission(
     payload: PermissionCreateRequest,
@@ -170,6 +191,7 @@ async def create_permission(
 @router.get(
     "/permissions",
     summary="Get permissions",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def get_permissions(
     db: AsyncSession = Depends(get_db),
@@ -182,12 +204,45 @@ async def get_permissions(
 @router.get(
     "/permissions/{permission_id}",
     summary="Get permission by ID",
+    dependencies=RBAC_MANAGEMENT,
 )
 async def get_permission_by_id(
     permission_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return await RBACService.get_permission_by_id(
+        db=db,
+        permission_id=permission_id,
+    )
+
+
+@router.patch(
+    "/permissions/{permission_id}",
+    summary="Update permission",
+    dependencies=RBAC_MANAGEMENT,
+)
+async def update_permission(
+    payload: PermissionUpdateRequest,
+    permission_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await RBACService.update_permission(
+        db=db,
+        permission_id=permission_id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/permissions/{permission_id}",
+    summary="Delete permission",
+    dependencies=RBAC_MANAGEMENT,
+)
+async def delete_permission(
+    permission_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return await RBACService.delete_permission(
         db=db,
         permission_id=permission_id,
     )

@@ -35,14 +35,10 @@ class PatientCreate(BaseModel):
         value = value.strip()
 
         if not value.isdigit():
-            raise ValueError(
-                "Mobile number must contain only numbers"
-            )
+            raise ValueError("Mobile number must contain only numbers")
 
         if len(value) < 10 or len(value) > 15:
-            raise ValueError(
-                "Mobile number must contain 10 to 15 digits"
-            )
+            raise ValueError("Mobile number must contain 10 to 15 digits")
 
         return value
 
@@ -105,6 +101,7 @@ class PatientDuplicateCheckResponse(BaseModel):
     patient_id: Optional[int] = None
     patient_code: Optional[str] = None
     message: str
+
 
 class PatientDeleteResponse(BaseModel):
     message: str

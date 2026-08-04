@@ -8,13 +8,9 @@ from fastapi import (
     status,
 )
 
-
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
-UPLOAD_ROOT = (
-    Path("storage")
-    / "patient_documents"
-).resolve()
+UPLOAD_ROOT = (Path("storage") / "patient_documents").resolve()
 
 
 MIME_EXTENSION_MAP = {
@@ -28,19 +24,13 @@ MIME_EXTENSION_MAP = {
 def detect_mime_type(
     file_content: bytes,
 ) -> str | None:
-    if file_content.startswith(
-        b"%PDF-"
-    ):
+    if file_content.startswith(b"%PDF-"):
         return "application/pdf"
 
-    if file_content.startswith(
-        b"\xff\xd8\xff"
-    ):
+    if file_content.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
 
-    if file_content.startswith(
-        b"\x89PNG\r\n\x1a\n"
-    ):
+    if file_content.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
 
     if (
@@ -58,70 +48,37 @@ async def save_patient_document(
     upload_file: UploadFile,
     patient_id: int,
 ) -> dict:
-    original_file_name = Path(
-        upload_file.filename or "document"
-    ).name
+    original_file_name = Path(upload_file.filename or "document").name
 
-    file_content = await upload_file.read(
-        MAX_FILE_SIZE + 1
-    )
+    file_content = await upload_file.read(MAX_FILE_SIZE + 1)
 
     await upload_file.close()
 
     if not file_content:
         raise HTTPException(
-            status_code=(
-                status.HTTP_400_BAD_REQUEST
-            ),
+            status_code=(status.HTTP_400_BAD_REQUEST),
             detail="Uploaded file is empty",
         )
 
-    if (
-        len(file_content)
-        > MAX_FILE_SIZE
-    ):
+    if len(file_content) > MAX_FILE_SIZE:
         raise HTTPException(
-            status_code=(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
-            ),
-            detail=(
-                "Document size must be "
-                "10 MB or less"
-            ),
+            status_code=(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE),
+            detail=("Document size must be " "10 MB or less"),
         )
 
-    detected_mime_type = (
-        detect_mime_type(
-            file_content
-        )
-    )
+    detected_mime_type = detect_mime_type(file_content)
 
-    if (
-        detected_mime_type
-        not in MIME_EXTENSION_MAP
-    ):
+    if detected_mime_type not in MIME_EXTENSION_MAP:
         raise HTTPException(
-            status_code=(
-                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
-            ),
-            detail=(
-                "Only PDF, JPG, PNG and "
-                "WEBP files are allowed"
-            ),
+            status_code=(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE),
+            detail=("Only PDF, JPG, PNG and " "WEBP files are allowed"),
         )
 
-    extension = MIME_EXTENSION_MAP[
-        detected_mime_type
-    ]
+    extension = MIME_EXTENSION_MAP[detected_mime_type]
 
-    stored_file_name = (
-        f"{uuid4().hex}{extension}"
-    )
+    stored_file_name = f"{uuid4().hex}{extension}"
 
-    patient_directory = (
-        UPLOAD_ROOT
-        / str(patient_id)
-    )
+    patient_directory = UPLOAD_ROOT / str(patient_id)
 
     await asyncio.to_thread(
         patient_directory.mkdir,
@@ -129,20 +86,13 @@ async def save_patient_document(
         exist_ok=True,
     )
 
-    file_path = (
-        patient_directory
-        / stored_file_name
-    ).resolve()
+    file_path = (patient_directory / stored_file_name).resolve()
 
     try:
-        file_path.relative_to(
-            UPLOAD_ROOT
-        )
+        file_path.relative_to(UPLOAD_ROOT)
     except ValueError as error:
         raise HTTPException(
-            status_code=(
-                status.HTTP_400_BAD_REQUEST
-            ),
+            status_code=(status.HTTP_400_BAD_REQUEST),
             detail="Invalid document path",
         ) from error
 
@@ -152,19 +102,11 @@ async def save_patient_document(
     )
 
     return {
-        "original_file_name": (
-            original_file_name
-        ),
-        "stored_file_name": (
-            stored_file_name
-        ),
+        "original_file_name": (original_file_name),
+        "stored_file_name": (stored_file_name),
         "file_path": str(file_path),
-        "mime_type": (
-            detected_mime_type
-        ),
-        "file_size": len(
-            file_content
-        ),
+        "mime_type": (detected_mime_type),
+        "file_size": len(file_content),
     }
 
 
@@ -177,16 +119,12 @@ async def delete_stored_document(
     path = Path(file_path).resolve()
 
     try:
-        path.relative_to(
-            UPLOAD_ROOT
-        )
+        path.relative_to(UPLOAD_ROOT)
     except ValueError:
         return
 
     if path.exists() and path.is_file():
-        await asyncio.to_thread(
-            path.unlink
-        )
+        await asyncio.to_thread(path.unlink)
 
 
 def get_safe_document_path(
@@ -195,22 +133,16 @@ def get_safe_document_path(
     path = Path(file_path).resolve()
 
     try:
-        path.relative_to(
-            UPLOAD_ROOT
-        )
+        path.relative_to(UPLOAD_ROOT)
     except ValueError as error:
         raise HTTPException(
-            status_code=(
-                status.HTTP_404_NOT_FOUND
-            ),
+            status_code=(status.HTTP_404_NOT_FOUND),
             detail="Document not found",
         ) from error
 
     if not path.exists():
         raise HTTPException(
-            status_code=(
-                status.HTTP_404_NOT_FOUND
-            ),
+            status_code=(status.HTTP_404_NOT_FOUND),
             detail="Document file not found",
         )
 

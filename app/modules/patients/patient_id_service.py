@@ -13,9 +13,7 @@ async def generate_patient_code(
 
     prefix = f"SSW-{current_year}-"
 
-    statement = select(
-        func.count(Patient.id)
-    ).where(
+    statement = select(func.count(Patient.id)).where(
         Patient.patient_code.like(f"{prefix}%")
     )
 

@@ -17,16 +17,13 @@ from app.modules.patients.portal.schemas import (
 )
 from app.modules.users.repository import UserRepository
 
-
 router = APIRouter()
 
 
 def get_client_ip(
     request: Request,
 ) -> str | None:
-    forwarded_for = request.headers.get(
-        "x-forwarded-for"
-    )
+    forwarded_for = request.headers.get("x-forwarded-for")
 
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
@@ -61,9 +58,7 @@ async def patient_login(
         db=db,
         email=payload.email,
         password=payload.password,
-        user_agent=request.headers.get(
-            "user-agent"
-        ),
+        user_agent=request.headers.get("user-agent"),
         ip_address=get_client_ip(request),
         allowed_roles=["patient"],
     )
@@ -77,9 +72,7 @@ async def patient_login(
         user=user,
     )
 
-    result["data"]["dashboard"] = (
-        "/patient/dashboard"
-    )
+    result["data"]["dashboard"] = "/patient/dashboard"
     result["data"]["patient"] = {
         "id": patient.id,
         "patient_code": patient.patient_code,

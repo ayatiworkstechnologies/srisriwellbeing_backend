@@ -13,12 +13,8 @@ async def ensure_patient_portal_schema(
     older local databases compatible with the patient portal model.
     """
 
-    result = await connection.execute(
-        text("SHOW COLUMNS FROM patients")
-    )
-    column_names = {
-        row[0] for row in result
-    }
+    result = await connection.execute(text("SHOW COLUMNS FROM patients"))
+    column_names = {row[0] for row in result}
 
     if "user_id" not in column_names:
         await connection.execute(

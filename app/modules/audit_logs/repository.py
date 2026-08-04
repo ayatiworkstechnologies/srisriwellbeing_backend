@@ -82,24 +82,16 @@ class AuditLogRepository:
             filters.append(AuditLog.module == module)
 
         if entity_type:
-            filters.append(
-                AuditLog.entity_type == entity_type
-            )
+            filters.append(AuditLog.entity_type == entity_type)
 
         if entity_id:
-            filters.append(
-                AuditLog.entity_id == entity_id
-            )
+            filters.append(AuditLog.entity_id == entity_id)
 
         if date_from:
-            filters.append(
-                AuditLog.created_at >= date_from
-            )
+            filters.append(AuditLog.created_at >= date_from)
 
         if date_to:
-            filters.append(
-                AuditLog.created_at <= date_to
-            )
+            filters.append(AuditLog.created_at <= date_to)
 
         count_result = await db.execute(
             select(func.count(AuditLog.id)).where(*filters)

@@ -1,16 +1,9 @@
 from typing import Any
 
-from sqlalchemy import (
-    BigInteger,
-    ForeignKey,
-    Index,
-    JSON,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, BigInteger, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import BaseModel
+from app.models.base import BaseModel
 
 
 class AuditLog(BaseModel):

@@ -66,9 +66,7 @@ class UserService:
             full_name=payload.full_name.strip(),
             email=normalized_email,
             phone=payload.phone,
-            password_hash=PasswordService.hash_password(
-                payload.password
-            ),
+            password_hash=PasswordService.hash_password(payload.password),
             status=UserStatus.ACTIVE.value,
             is_active=True,
             is_verified=False,
@@ -128,10 +126,7 @@ class UserService:
                 email=normalized_email,
             )
 
-            if (
-                existing_user is not None
-                and existing_user.id != user.id
-            ):
+            if existing_user is not None and existing_user.id != user.id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Email already exists",
@@ -140,9 +135,7 @@ class UserService:
             update_data["email"] = normalized_email
 
         if "full_name" in update_data:
-            update_data["full_name"] = (
-                update_data["full_name"].strip()
-            )
+            update_data["full_name"] = update_data["full_name"].strip()
 
         for field_name, field_value in update_data.items():
             setattr(user, field_name, field_value)

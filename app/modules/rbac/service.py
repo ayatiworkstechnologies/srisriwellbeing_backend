@@ -6,12 +6,23 @@ from app.modules.rbac.model import Permission, Role
 from app.modules.rbac.repository import RBACRepository
 from app.modules.rbac.schema import (
     PermissionCreateRequest,
+    PermissionUpdateRequest,
     RoleCreateRequest,
+    RoleUpdateRequest,
 )
 from app.modules.users.repository import UserRepository
 
 
 class RBACService:
+    CLINICAL_TREATMENT_PLAN_PERMISSIONS = {
+        "treatment_plan.create",
+        "treatment_plan.update",
+        "treatment_plan.prepare",
+        "treatment_plan.review",
+        "treatment_plan.approve",
+        "treatment_plan.finalize",
+    }
+    CLINICAL_AUTHORITY_ROLES = {"duty_doctor", "specialist_doctor"}
 
     @staticmethod
     async def get_roles(
@@ -157,9 +168,7 @@ class RBACService:
             name=role_name,
             display_name=payload.display_name.strip(),
             description=(
-                payload.description.strip()
-                if payload.description
-                else None
+                payload.description.strip() if payload.description else None
             ),
             is_system=False,
             is_active=payload.is_active,
@@ -207,11 +216,9 @@ class RBACService:
         action = payload.action.strip().lower()
         permission_code = f"{module}.{action}"
 
-        existing_permission = (
-            await RBACRepository.get_permission_by_code(
-                db=db,
-                code=permission_code,
-            )
+        existing_permission = await RBACRepository.get_permission_by_code(
+            db=db,
+            code=permission_code,
         )
 
         if existing_permission is not None:
@@ -225,19 +232,15 @@ class RBACService:
             action=action,
             code=permission_code,
             description=(
-                payload.description.strip()
-                if payload.description
-                else None
+                payload.description.strip() if payload.description else None
             ),
             is_active=True,
         )
 
         try:
-            created_permission = (
-                await RBACRepository.create_permission(
-                    db=db,
-                    permission=permission,
-                )
+            created_permission = await RBACRepository.create_permission(
+                db=db,
+                permission=permission,
             )
 
             await db.commit()
@@ -291,9 +294,7 @@ class RBACService:
             permission_ids=unique_permission_ids,
         )
 
-        found_permission_ids = {
-            permission.id for permission in permissions
-        }
+        found_permission_ids = {permission.id for permission in permissions}
 
         missing_permission_ids = [
             permission_id
@@ -309,6 +310,26 @@ class RBACService:
                         "Some permissions were not found or are inactive"
                     ),
                     "permission_ids": missing_permission_ids,
+                },
+            )
+
+        clinical_codes = {
+            permission.code
+            for permission in permissions
+            if permission.code
+            in RBACService.CLINICAL_TREATMENT_PLAN_PERMISSIONS
+        }
+        if clinical_codes and role.name.strip().lower() not in (
+            RBACService.CLINICAL_AUTHORITY_ROLES
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "message": (
+                        "Clinical treatment-plan authority is restricted to "
+                        "Duty Doctors and Specialist Doctors"
+                    ),
+                    "forbidden_permissions": sorted(clinical_codes),
                 },
             )
 
@@ -332,8 +353,7 @@ class RBACService:
             raise
 
         permission_by_id = {
-            permission.id: permission
-            for permission in permissions
+            permission.id: permission for permission in permissions
         }
 
         ordered_permissions = [
@@ -361,6 +381,7 @@ class RBACService:
                 ],
             },
         }
+
     @staticmethod
     async def assign_roles_to_user(
         db: AsyncSession,
@@ -546,3 +567,86 @@ class RBACService:
                 "role_id": role_id,
             },
         }
+
+    @staticmethod
+    async def update_role(
+        db: AsyncSession,
+        role_id: int,
+        payload: RoleUpdateRequest,
+    ) -> dict:
+        role = await RBACRepository.get_role_by_id(db=db, role_id=role_id)
+        if role is None:
+            raise HTTPException(status_code=404, detail="Role not found")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(
+                role, field, value.strip() if isinstance(value, str) else value
+            )
+        await db.commit()
+        await db.refresh(role)
+        return {
+            "success": True,
+            "message": "Role updated successfully",
+            "data": {
+                "id": role.id,
+                "name": role.name,
+                "display_name": role.display_name,
+                "description": role.description,
+                "is_active": role.is_active,
+            },
+        }
+
+    @staticmethod
+    async def delete_role(db: AsyncSession, role_id: int) -> dict:
+        role = await RBACRepository.get_role_by_id(db=db, role_id=role_id)
+        if role is None:
+            raise HTTPException(status_code=404, detail="Role not found")
+        if role.is_system:
+            raise HTTPException(
+                status_code=422, detail="System roles cannot be deleted"
+            )
+        await RBACRepository.delete_role(db=db, role=role)
+        await db.commit()
+        return {"success": True, "message": "Role deleted successfully"}
+
+    @staticmethod
+    async def update_permission(
+        db: AsyncSession,
+        permission_id: int,
+        payload: PermissionUpdateRequest,
+    ) -> dict:
+        permission = await RBACRepository.get_permission_by_id(
+            db=db,
+            permission_id=permission_id,
+        )
+        if permission is None:
+            raise HTTPException(status_code=404, detail="Permission not found")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(
+                permission,
+                field,
+                value.strip() if isinstance(value, str) else value,
+            )
+        await db.commit()
+        await db.refresh(permission)
+        return {
+            "success": True,
+            "message": "Permission updated successfully",
+            "data": {
+                "id": permission.id,
+                "code": permission.code,
+                "description": permission.description,
+                "is_active": permission.is_active,
+            },
+        }
+
+    @staticmethod
+    async def delete_permission(db: AsyncSession, permission_id: int) -> dict:
+        permission = await RBACRepository.get_permission_by_id(
+            db=db,
+            permission_id=permission_id,
+        )
+        if permission is None:
+            raise HTTPException(status_code=404, detail="Permission not found")
+        await RBACRepository.delete_permission(db=db, permission=permission)
+        await db.commit()
+        return {"success": True, "message": "Permission deleted successfully"}

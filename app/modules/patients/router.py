@@ -1,16 +1,10 @@
 from typing import Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    Path,
-    Query,
-    status,
-)
+from fastapi import APIRouter, Depends, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.modules.auth.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.modules.patients.constants import PatientStatus
 from app.modules.patients.schemas import (
     PatientCreate,
@@ -24,7 +18,6 @@ from app.modules.patients.schemas import (
 )
 from app.modules.patients.service import PatientService
 
-
 router = APIRouter()
 
 
@@ -37,7 +30,7 @@ router = APIRouter()
 async def create_patient(
     payload: PatientCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("patient.create")),
 ):
     return await PatientService.create_patient(
         db=db,
@@ -71,15 +64,13 @@ async def list_patients(
         le=100,
     ),
     db: AsyncSession = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    _current_user=Depends(require_permission("patient.view")),
 ):
     return await PatientService.list_patients(
         db=db,
         search=search,
         patient_status=(
-            patient_status.value
-            if patient_status is not None
-            else None
+            patient_status.value if patient_status is not None else None
         ),
         skip=skip,
         limit=limit,
@@ -96,7 +87,7 @@ async def list_patients(
 async def check_patient_duplicates(
     payload: PatientDuplicateCheckRequest,
     db: AsyncSession = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    _current_user=Depends(require_permission("patient.create")),
 ):
     return await PatientService.check_duplicates(
         db=db,
@@ -116,7 +107,7 @@ async def get_patient(
         gt=0,
     ),
     db: AsyncSession = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    _current_user=Depends(require_permission("patient.view")),
 ):
     return await PatientService.get_patient(
         db=db,
@@ -137,7 +128,7 @@ async def update_patient(
         gt=0,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("patient.update")),
 ):
     return await PatientService.update_patient(
         db=db,
@@ -159,7 +150,7 @@ async def delete_patient(
         gt=0,
     ),
     db: AsyncSession = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    _current_user=Depends(require_permission("patient.update")),
 ):
     return await PatientService.delete_patient(
         db=db,

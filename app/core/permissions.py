@@ -16,21 +16,16 @@ def require_permission(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> User:
-        has_permission = (
-            await RBACRepository.user_has_permission(
-                db=db,
-                user_id=current_user.id,
-                permission_code=permission_code,
-            )
+        has_permission = await RBACRepository.user_has_permission(
+            db=db,
+            user_id=current_user.id,
+            permission_code=permission_code,
         )
 
         if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Permission required: "
-                    f"{permission_code}"
-                ),
+                detail=(f"Permission required: " f"{permission_code}"),
             )
 
         return current_user

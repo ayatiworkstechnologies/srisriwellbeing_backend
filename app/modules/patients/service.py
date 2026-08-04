@@ -17,7 +17,6 @@ from app.modules.patients.schemas import (
     PatientUpdate,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -44,9 +43,7 @@ class PatientService:
         ):
             if hasattr(Patient, relationship_name):
                 options.append(
-                    selectinload(
-                        getattr(Patient, relationship_name)
-                    )
+                    selectinload(getattr(Patient, relationship_name))
                 )
 
         return options
@@ -73,9 +70,7 @@ class PatientService:
             if part and str(part).strip()
         )
 
-        return " ".join(
-            full_name.lower().split()
-        )
+        return " ".join(full_name.lower().split())
 
     # ------------------------------------------------------------------
     # Generate patient code
@@ -92,9 +87,7 @@ class PatientService:
             )
 
             result = await db.execute(
-                select(Patient.id).where(
-                    Patient.patient_code == patient_code
-                )
+                select(Patient.id).where(Patient.patient_code == patient_code)
             )
 
             if result.scalar_one_or_none() is None:
@@ -119,34 +112,21 @@ class PatientService:
         first_name = payload.first_name.strip()
 
         existing_result = await db.execute(
-            select(Patient).where(
-                Patient.mobile_number == mobile_number
-            )
+            select(Patient).where(Patient.mobile_number == mobile_number)
         )
 
-        existing_patient = (
-            existing_result.scalars().first()
-        )
+        existing_patient = existing_result.scalars().first()
 
         if existing_patient is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "A patient with this mobile number "
-                    "already exists"
-                ),
+                detail=("A patient with this mobile number " "already exists"),
             )
 
-        patient_code = (
-            await PatientService.generate_patient_code(
-                db=db
-            )
-        )
+        patient_code = await PatientService.generate_patient_code(db=db)
 
-        normalized_full_name = (
-            PatientService.normalize_full_name(
-                first_name=first_name,
-            )
+        normalized_full_name = PatientService.normalize_full_name(
+            first_name=first_name,
         )
 
         patient = Patient(
@@ -195,15 +175,9 @@ class PatientService:
             error_message = str(exc.orig).lower()
 
             if "mobile" in error_message:
-                detail = (
-                    "A patient with this mobile number "
-                    "already exists"
-                )
+                detail = "A patient with this mobile number " "already exists"
             elif "patient_code" in error_message:
-                detail = (
-                    "Patient code already exists. "
-                    "Please try again"
-                )
+                detail = "Patient code already exists. " "Please try again"
             else:
                 detail = (
                     "Patient could not be created due to "
@@ -224,12 +198,8 @@ class PatientService:
             )
 
             raise HTTPException(
-                status_code=(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR
-                ),
-                detail=(
-                    "Unexpected error while creating patient"
-                ),
+                status_code=(status.HTTP_500_INTERNAL_SERVER_ERROR),
+                detail=("Unexpected error while creating patient"),
             ) from exc
 
     # ------------------------------------------------------------------
@@ -254,39 +224,22 @@ class PatientService:
 
                 filters.append(
                     or_(
-                        Patient.patient_code.ilike(
-                            search_pattern
-                        ),
-                        Patient.first_name.ilike(
-                            search_pattern
-                        ),
-                        Patient.normalized_full_name.ilike(
-                            search_pattern
-                        ),
-                        Patient.mobile_number.ilike(
-                            search_pattern
-                        ),
-                        Patient.email.ilike(
-                            search_pattern
-                        ),
+                        Patient.patient_code.ilike(search_pattern),
+                        Patient.first_name.ilike(search_pattern),
+                        Patient.normalized_full_name.ilike(search_pattern),
+                        Patient.mobile_number.ilike(search_pattern),
+                        Patient.email.ilike(search_pattern),
                     )
                 )
 
         if patient_status:
-            filters.append(
-                Patient.status == patient_status
-            )
+            filters.append(Patient.status == patient_status)
 
-        count_query = select(
-            func.count(Patient.id)
-        )
+        count_query = select(func.count(Patient.id))
 
         patient_query = (
             select(Patient)
-            .options(
-                *PatientService
-                ._patient_relationship_options()
-            )
+            .options(*PatientService._patient_relationship_options())
             .order_by(
                 Patient.created_at.desc(),
                 Patient.id.desc(),
@@ -302,16 +255,9 @@ class PatientService:
         count_result = await db.execute(count_query)
         total = count_result.scalar_one()
 
-        patient_result = await db.execute(
-            patient_query
-        )
+        patient_result = await db.execute(patient_query)
 
-        patients = (
-            patient_result
-            .scalars()
-            .unique()
-            .all()
-        )
+        patients = patient_result.scalars().unique().all()
 
         return {
             "total": total,
@@ -331,21 +277,11 @@ class PatientService:
     ) -> Patient:
         result = await db.execute(
             select(Patient)
-            .options(
-                *PatientService
-                ._patient_relationship_options()
-            )
-            .where(
-                Patient.id == patient_id
-            )
+            .options(*PatientService._patient_relationship_options())
+            .where(Patient.id == patient_id)
         )
 
-        patient = (
-            result
-            .scalars()
-            .unique()
-            .first()
-        )
+        patient = result.scalars().unique().first()
 
         if patient is None:
             raise HTTPException(
@@ -367,9 +303,7 @@ class PatientService:
         updated_by: int,
     ) -> Patient:
         result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id
-            )
+            select(Patient).where(Patient.id == patient_id)
         )
 
         patient = result.scalars().first()
@@ -380,9 +314,7 @@ class PatientService:
                 detail="Patient not found",
             )
 
-        update_data = payload.model_dump(
-            exclude_unset=True
-        )
+        update_data = payload.model_dump(exclude_unset=True)
 
         if not update_data:
             raise HTTPException(
@@ -391,39 +323,30 @@ class PatientService:
             )
 
         if "mobile_number" in update_data:
-            mobile_number = update_data[
-                "mobile_number"
-            ]
+            mobile_number = update_data["mobile_number"]
 
             if mobile_number is not None:
                 mobile_number = mobile_number.strip()
 
                 duplicate_result = await db.execute(
                     select(Patient.id).where(
-                        Patient.mobile_number
-                        == mobile_number,
+                        Patient.mobile_number == mobile_number,
                         Patient.id != patient_id,
                     )
                 )
 
-                duplicate_id = (
-                    duplicate_result.scalar_one_or_none()
-                )
+                duplicate_id = duplicate_result.scalar_one_or_none()
 
                 if duplicate_id is not None:
                     raise HTTPException(
-                        status_code=(
-                            status.HTTP_409_CONFLICT
-                        ),
+                        status_code=(status.HTTP_409_CONFLICT),
                         detail=(
                             "Another patient already uses "
                             "this mobile number"
                         ),
                     )
 
-                update_data[
-                    "mobile_number"
-                ] = mobile_number
+                update_data["mobile_number"] = mobile_number
 
         for field_name in (
             "first_name",
@@ -440,9 +363,7 @@ class PatientService:
                     cleaned_value = value.strip()
 
                     update_data[field_name] = (
-                        cleaned_value
-                        if cleaned_value
-                        else None
+                        cleaned_value if cleaned_value else None
                     )
 
         for field_name, value in update_data.items():
@@ -453,12 +374,10 @@ class PatientService:
                     value,
                 )
 
-        patient.normalized_full_name = (
-            PatientService.normalize_full_name(
-                first_name=patient.first_name,
-                middle_name=patient.middle_name,
-                last_name=patient.last_name,
-            )
+        patient.normalized_full_name = PatientService.normalize_full_name(
+            first_name=patient.first_name,
+            middle_name=patient.middle_name,
+            last_name=patient.last_name,
         )
 
         patient.updated_by = updated_by
@@ -501,12 +420,8 @@ class PatientService:
             )
 
             raise HTTPException(
-                status_code=(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR
-                ),
-                detail=(
-                    "Unexpected error while updating patient"
-                ),
+                status_code=(status.HTTP_500_INTERNAL_SERVER_ERROR),
+                detail=("Unexpected error while updating patient"),
             ) from exc
 
     # ------------------------------------------------------------------
@@ -518,14 +433,10 @@ class PatientService:
         db: AsyncSession,
         payload: PatientDuplicateCheckRequest,
     ) -> dict:
-        mobile_number = (
-            payload.mobile_number.strip()
-        )
+        mobile_number = payload.mobile_number.strip()
 
         result = await db.execute(
-            select(Patient).where(
-                Patient.mobile_number == mobile_number
-            )
+            select(Patient).where(Patient.mobile_number == mobile_number)
         )
 
         patient = result.scalars().first()
@@ -535,21 +446,16 @@ class PatientService:
                 "is_duplicate": False,
                 "patient_id": None,
                 "patient_code": None,
-                "message": (
-                    "No patient found with this "
-                    "mobile number"
-                ),
+                "message": ("No patient found with this " "mobile number"),
             }
 
         return {
             "is_duplicate": True,
             "patient_id": patient.id,
             "patient_code": patient.patient_code,
-            "message": (
-                "A patient with this mobile number "
-                "already exists"
-            ),
+            "message": ("A patient with this mobile number " "already exists"),
         }
+
     # ------------------------------------------------------------------
     # 6. Delete patient
     # ------------------------------------------------------------------
@@ -560,9 +466,7 @@ class PatientService:
         patient_id: int,
     ) -> dict:
         result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id
-            )
+            select(Patient).where(Patient.id == patient_id)
         )
 
         patient = result.scalars().first()

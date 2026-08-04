@@ -1,17 +1,13 @@
 from collections.abc import AsyncGenerator
-from sqlalchemy.orm import DeclarativeBase
-from app.models.base import Base
 
-import app.models.model_registry  # noqa: F401
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
+import app.models.model_registry  # noqa: F401
 from app.core.config import settings
-
-
 
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -27,10 +23,6 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
-
-
-class BaseModel(DeclarativeBase):
-    pass
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

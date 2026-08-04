@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     APP_ENV: str = "development"
     DEBUG: bool = True
+    API_V1_PREFIX: str = "/api/v1"
+    LOG_LEVEL: str = "INFO"
 
     # Database
     DATABASE_URL: str
@@ -19,12 +21,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+    MAX_LOGIN_ATTEMPTS: int = 5
+    ACCOUNT_LOCK_MINUTES: int = 15
 
     # CORS
-    ALLOWED_ORIGINS: str = (
-        "http://localhost:3000,"
-        "http://127.0.0.1:3000"
-    )
+    ALLOWED_ORIGINS: str = "http://localhost:3000," "http://127.0.0.1:3000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

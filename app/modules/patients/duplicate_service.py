@@ -75,20 +75,12 @@ async def find_possible_duplicates(
     ]
 
     if payload.email:
-        filters.append(
-            Patient.email == payload.email.lower()
-        )
+        filters.append(Patient.email == payload.email.lower())
 
     if payload.date_of_birth:
-        filters.append(
-            Patient.date_of_birth == payload.date_of_birth
-        )
+        filters.append(Patient.date_of_birth == payload.date_of_birth)
 
-    statement = (
-        select(Patient)
-        .where(or_(*filters))
-        .limit(25)
-    )
+    statement = select(Patient).where(or_(*filters)).limit(25)
 
     result = await db.execute(statement)
     candidate_patients = result.scalars().unique().all()
@@ -96,9 +88,7 @@ async def find_possible_duplicates(
     matches: list[DuplicatePatientMatchResponse] = []
 
     for patient in candidate_patients:
-        mobile_match = (
-            patient.mobile_number == payload.mobile_number
-        )
+        mobile_match = patient.mobile_number == payload.mobile_number
 
         email_match = bool(
             payload.email

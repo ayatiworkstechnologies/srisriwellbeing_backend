@@ -28,15 +28,11 @@ def require_role(
     """
 
     normalized_roles = {
-        role.strip().lower()
-        for role in allowed_roles
-        if role and role.strip()
+        role.strip().lower() for role in allowed_roles if role and role.strip()
     }
 
     if not normalized_roles:
-        raise ValueError(
-            "At least one allowed role must be configured"
-        )
+        raise ValueError("At least one allowed role must be configured")
 
     async def role_checker(
         current_user: User = Depends(get_current_user),
@@ -56,12 +52,9 @@ def require_role(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "message": (
-                    "You do not have permission "
-                    "to access this resource"
+                    "You do not have permission " "to access this resource"
                 ),
-                "required_roles": sorted(
-                    normalized_roles
-                ),
+                "required_roles": sorted(normalized_roles),
             },
         )
 
@@ -103,14 +96,11 @@ def require_permission(
     normalized_permissions = {
         permission_code.strip().lower()
         for permission_code in permission_codes
-        if permission_code
-        and permission_code.strip()
+        if permission_code and permission_code.strip()
     }
 
     if not normalized_permissions:
-        raise ValueError(
-            "At least one permission must be configured"
-        )
+        raise ValueError("At least one permission must be configured")
 
     async def permission_checker(
         current_user: User = Depends(get_current_user),
@@ -128,37 +118,25 @@ def require_permission(
             )
 
         if require_all:
-            is_allowed = all(
-                permission_results.values()
-            )
+            is_allowed = all(permission_results.values())
         else:
-            is_allowed = any(
-                permission_results.values()
-            )
+            is_allowed = any(permission_results.values())
 
         if is_allowed:
             return current_user
 
         missing_permissions = [
             permission_code
-            for permission_code, has_permission
-            in permission_results.items()
+            for permission_code, has_permission in permission_results.items()
             if not has_permission
         ]
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "message": (
-                    "You do not have the required "
-                    "permission"
-                ),
-                "required_permissions": sorted(
-                    normalized_permissions
-                ),
-                "missing_permissions": sorted(
-                    missing_permissions
-                ),
+                "message": ("You do not have the required " "permission"),
+                "required_permissions": sorted(normalized_permissions),
+                "missing_permissions": sorted(missing_permissions),
                 "require_all": require_all,
             },
         )

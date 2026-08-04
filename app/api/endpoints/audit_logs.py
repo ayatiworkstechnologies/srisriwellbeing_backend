@@ -14,9 +14,6 @@ from app.modules.audit_logs.schema import (
 from app.modules.audit_logs.service import AuditLogService
 from app.modules.users.model import User
 
-
-
-
 router = APIRouter(
     prefix="/audit-logs",
     tags=["Audit Logs"],
@@ -38,9 +35,7 @@ async def list_audit_logs(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("audit_logs.view")
-    ),
+    current_user: User = Depends(require_permission("audit_logs.view")),
 ):
     items, total = await AuditLogService.list_logs(
         db=db,
@@ -59,10 +54,7 @@ async def list_audit_logs(
         success=True,
         message="Audit logs fetched successfully",
         data=AuditLogListData(
-            items=[
-                AuditLogResponse.model_validate(item)
-                for item in items
-            ],
+            items=[AuditLogResponse.model_validate(item) for item in items],
             total=total,
             skip=skip,
             limit=limit,
@@ -77,9 +69,7 @@ async def list_audit_logs(
 async def get_audit_log(
     audit_log_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("audit_logs.view")
-    ),
+    current_user: User = Depends(require_permission("audit_logs.view")),
 ):
     audit_log = await AuditLogService.get_by_id(
         db,
@@ -89,7 +79,5 @@ async def get_audit_log(
     return AuditLogDetailResponse(
         success=True,
         message="Audit log fetched successfully",
-        data=AuditLogResponse.model_validate(
-            audit_log
-        ),
+        data=AuditLogResponse.model_validate(audit_log),
     )

@@ -1,12 +1,13 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
 
 from app.modules.users.model import User
 
 
 class UserRepository:
-    
+
     @staticmethod
     async def get_by_email(
         db: AsyncSession,
@@ -67,7 +68,7 @@ class UserRepository:
         await db.refresh(user)
 
         return user
-    
+
     @staticmethod
     async def update_password(
         db: AsyncSession,
@@ -83,7 +84,7 @@ class UserRepository:
         await db.refresh(user)
 
         return user
-    
+
     @staticmethod
     async def get_all(
         db: AsyncSession,

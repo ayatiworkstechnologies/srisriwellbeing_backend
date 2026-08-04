@@ -156,7 +156,9 @@ class RegisterRequest(BaseModel):
         )
 
         number_part = (
-            cleaned_phone[1:] if cleaned_phone.startswith("+") else cleaned_phone
+            cleaned_phone[1:]
+            if cleaned_phone.startswith("+")
+            else cleaned_phone
         )
 
         if not number_part.isdigit():
@@ -183,9 +185,13 @@ class LoginRequest(BaseModel):
         max_length=128,
     )
 
-    role_id: int = Field(
+    role_id: int | None = Field(
+        default=None,
         gt=0,
-        description="Assigned role to use for this login session",
+        description=(
+            "Optional assigned role for this session. The first active "
+            "assigned role is used when omitted."
+        ),
     )
 
     @field_validator("email")
@@ -261,6 +267,8 @@ class ChangePasswordRequest(BaseModel):
             raise ValueError("New password and confirm password do not match")
 
         if self.current_password == self.new_password:
-            raise ValueError("New password must be different from current password")
+            raise ValueError(
+                "New password must be different from current password"
+            )
 
         return self

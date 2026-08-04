@@ -7,7 +7,7 @@ from app.core.database import get_db
 router = APIRouter()
 
 
-@router.get("")
+@router.get("/health")
 async def health_check(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -21,9 +21,7 @@ async def health_check(
             "data": {
                 "api": "healthy",
                 "database": (
-                    "connected"
-                    if database_status == 1
-                    else "disconnected"
+                    "connected" if database_status == 1 else "disconnected"
                 ),
             },
         }

@@ -27,12 +27,12 @@ def test_register_requires_positive_role_id() -> None:
         RegisterRequest(**valid_payload, role_id=0)
 
 
-def test_login_requires_positive_role_id() -> None:
-    with pytest.raises(ValidationError):
-        LoginRequest(
-            email="test@example.com",
-            password="StrongPass1!",
-        )
+def test_login_allows_role_to_be_selected_or_omitted() -> None:
+    default_payload = LoginRequest(
+        email="test@example.com",
+        password="StrongPass1!",
+    )
+    assert default_payload.role_id is None
 
     payload = LoginRequest(
         email="TEST@EXAMPLE.COM",
@@ -97,10 +97,7 @@ async def test_login_rejects_role_not_assigned_to_user() -> None:
             return_value=True,
         ),
         patch(
-            (
-                "app.modules.auth.service.RBACRepository"
-                ".get_user_roles"
-            ),
+            ("app.modules.auth.service.RBACRepository" ".get_user_roles"),
             new=AsyncMock(return_value=[assigned_role]),
         ),
     ):
@@ -113,4 +110,6 @@ async def test_login_rejects_role_not_assigned_to_user() -> None:
             )
 
     assert exc_info.value.status_code == 403
-    assert exc_info.value.detail == ("Selected role is not assigned to this user")
+    assert exc_info.value.detail == (
+        "Selected role is not assigned to this user"
+    )

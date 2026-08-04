@@ -3,10 +3,59 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.model import UserSession
+from app.modules.auth.model import LoginAttempt, RefreshToken, UserSession
 
 
 class AuthRepository:
+    @staticmethod
+    async def record_login_attempt(
+        db: AsyncSession,
+        *,
+        email: str,
+        was_successful: bool,
+        user_id: int | None = None,
+        failure_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        db.add(
+            LoginAttempt(
+                user_id=user_id,
+                email=email,
+                was_successful=was_successful,
+                failure_reason=failure_reason,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        )
+        await db.flush()
+
+    @staticmethod
+    async def create_refresh_token(
+        db: AsyncSession,
+        token: RefreshToken,
+    ) -> None:
+        db.add(token)
+        await db.flush()
+
+    @staticmethod
+    async def rotate_refresh_token(
+        db: AsyncSession,
+        *,
+        old_hash: str,
+        replacement: RefreshToken,
+    ) -> None:
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.token_hash == old_hash,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.utcnow())
+        )
+        db.add(replacement)
+        await db.flush()
+
     @staticmethod
     async def create_session(
         db: AsyncSession,
@@ -69,6 +118,15 @@ class AuthRepository:
         session.is_active = False
         session.revoked_at = datetime.utcnow()
 
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.session_id == session.id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.utcnow())
+        )
+
         await db.flush()
 
     @staticmethod
@@ -90,8 +148,20 @@ class AuthRepository:
 
         result = await db.execute(statement)
 
+        session_ids = select(UserSession.id).where(
+            UserSession.user_id == user_id
+        )
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.session_id.in_(session_ids),
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.utcnow())
+        )
+
         return result.rowcount or 0
-    
+
     @staticmethod
     async def get_user_sessions(
         db: AsyncSession,

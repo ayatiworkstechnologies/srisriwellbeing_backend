@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, Request, status, Path
+from fastapi import APIRouter, Depends, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.permissions import require_permission
 from app.modules.auth.dependencies import (
     CurrentAuthContext,
     CurrentUser,
     get_current_user,
 )
-
 from app.modules.auth.schema import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -17,10 +17,8 @@ from app.modules.auth.schema import (
     ResetPasswordRequest,
     UserProfileUpdateRequest,
 )
-
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
-
 
 router = APIRouter()
 
@@ -185,6 +183,7 @@ async def reset_password(
 async def activate_account(
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("users.manage")),
 ) -> dict:
     return await AuthService.activate_account(
         db=db,
@@ -196,6 +195,7 @@ async def activate_account(
 async def deactivate_account(
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("users.manage")),
 ) -> dict:
     return await AuthService.deactivate_account(
         db=db,

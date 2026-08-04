@@ -16,10 +16,7 @@ from app.modules.rbac.dependencies import (
 )
 from app.modules.users.model import User
 
-
-patient_role_dependency = require_role(
-    "patient"
-)
+patient_role_dependency = require_role("patient")
 
 
 CurrentPatientUser = Annotated[
@@ -32,20 +29,15 @@ async def get_current_patient(
     current_user: CurrentPatientUser,
     db: AsyncSession = Depends(get_db),
 ) -> Patient:
-    patient = (
-        await PatientPortalRepository
-        .get_patient_by_user_id(
-            db=db,
-            user_id=current_user.id,
-        )
+    patient = await PatientPortalRepository.get_patient_by_user_id(
+        db=db,
+        user_id=current_user.id,
     )
 
     if patient is None:
-        patient = await (
-            PatientPortalAuthService.ensure_patient_profile(
-                db=db,
-                user=current_user,
-            )
+        patient = await PatientPortalAuthService.ensure_patient_profile(
+            db=db,
+            user=current_user,
         )
 
     return patient

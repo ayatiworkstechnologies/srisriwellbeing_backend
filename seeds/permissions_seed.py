@@ -1,0 +1,961 @@
+# flake8: noqa: E402
+from __future__ import annotations
+
+import asyncio
+import logging
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+# Make direct execution resolve the repository's app package.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import AsyncSessionLocal, engine
+from app.modules.rbac.model import Permission
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class PermissionSeed:
+    code: str
+    name: str
+    module: str
+    description: str
+
+
+def permission(
+    code: str,
+    name: str,
+    module: str,
+    description: str,
+) -> PermissionSeed:
+    return PermissionSeed(
+        code=code,
+        name=name,
+        module=module,
+        description=description,
+    )
+
+
+WEEK_1_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    
+    permission(
+        "auth.login",
+        "Login",
+        "auth",
+        "Authenticate using email and password.",
+    ),
+    permission(
+        "auth.logout",
+        "Logout",
+        "auth",
+        "End the current authenticated session.",
+    ),
+    permission(
+        "auth.refresh_token",
+        "Refresh Access Token",
+        "auth",
+        "Create a new access token using a valid refresh token.",
+    ),
+    permission(
+        "auth.forgot_password",
+        "Forgot Password",
+        "auth",
+        "Request a password-reset workflow.",
+    ),
+    permission(
+        "auth.reset_password",
+        "Reset Password",
+        "auth",
+        "Reset a password using a valid reset token.",
+    ),
+    permission(
+        "auth.change_password",
+        "Change Own Password",
+        "auth",
+        "Change the authenticated user's password.",
+    ),
+    permission(
+        "auth.view_current_user",
+        "View Current User",
+        "auth",
+        "View the authenticated user's identity, roles and permissions.",
+    ),
+    permission(
+        "profile.view_own",
+        "View Own Profile",
+        "profile",
+        "View the authenticated user's profile.",
+    ),
+    permission(
+        "profile.update_own",
+        "Update Own Profile",
+        "profile",
+        "Update the authenticated user's profile.",
+    ),
+    permission(
+        "session.view_own",
+        "View Own Sessions",
+        "session",
+        "View the authenticated user's active sessions.",
+    ),
+    permission(
+        "session.revoke_own",
+        "Revoke Own Sessions",
+        "session",
+        "Revoke one or more sessions owned by the authenticated user.",
+    ),
+)
+
+
+WEEK_2_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "users.create",
+        "Create User",
+        "users",
+        "Create an application user.",
+    ),
+    permission(
+        "users.view",
+        "View User",
+        "users",
+        "View a user account.",
+    ),
+    permission(
+        "users.list",
+        "List Users",
+        "users",
+        "List and search user accounts.",
+    ),
+    permission(
+        "users.update",
+        "Update User",
+        "users",
+        "Update a user account.",
+    ),
+    permission(
+        "users.activate",
+        "Activate User",
+        "users",
+        "Activate a user account.",
+    ),
+    permission(
+        "users.deactivate",
+        "Deactivate User",
+        "users",
+        "Deactivate a user account.",
+    ),
+    permission(
+        "users.suspend",
+        "Suspend User",
+        "users",
+        "Suspend a user account.",
+    ),
+    permission(
+        "users.unsuspend",
+        "Unsuspend User",
+        "users",
+        "Remove a user suspension.",
+    ),
+    permission(
+        "users.reset_password",
+        "Reset User Password",
+        "users",
+        "Administratively initiate a user password reset.",
+    ),
+    permission(
+        "users.assign_role",
+        "Assign User Role",
+        "users",
+        "Assign a role to a user.",
+    ),
+    permission(
+        "users.remove_role",
+        "Remove User Role",
+        "users",
+        "Remove a role from a user.",
+    ),
+    permission(
+        "users.view_activity",
+        "View User Activity",
+        "users",
+        "View account activity for a user.",
+    ),
+    permission(
+        "users.manage",
+        "Manage Users",
+        "users",
+        "Perform general user-account administration.",
+    ),
+    permission(
+        "roles.create",
+        "Create Role",
+        "roles",
+        "Create a role.",
+    ),
+    permission(
+        "roles.view",
+        "View Role",
+        "roles",
+        "View role details.",
+    ),
+    permission(
+        "roles.list",
+        "List Roles",
+        "roles",
+        "List roles.",
+    ),
+    permission(
+        "roles.update",
+        "Update Role",
+        "roles",
+        "Update a role.",
+    ),
+    permission(
+        "roles.delete",
+        "Delete Role",
+        "roles",
+        "Delete a non-system role.",
+    ),
+    permission(
+        "roles.assign_permission",
+        "Assign Role Permission",
+        "roles",
+        "Assign a permission to a role.",
+    ),
+    permission(
+        "roles.remove_permission",
+        "Remove Role Permission",
+        "roles",
+        "Remove a permission from a role.",
+    ),
+    permission(
+        "roles.manage",
+        "Manage Roles",
+        "roles",
+        "Perform general role administration.",
+    ),
+    permission(
+        "permissions.create",
+        "Create Permission",
+        "permissions",
+        "Create a permission.",
+    ),
+    permission(
+        "permissions.view",
+        "View Permission",
+        "permissions",
+        "View permission details.",
+    ),
+    permission(
+        "permissions.list",
+        "List Permissions",
+        "permissions",
+        "List permissions.",
+    ),
+    permission(
+        "permissions.update",
+        "Update Permission",
+        "permissions",
+        "Update permission metadata.",
+    ),
+    permission(
+        "permissions.delete",
+        "Delete Permission",
+        "permissions",
+        "Delete a non-system permission.",
+    ),
+    permission(
+        "permissions.manage",
+        "Manage Permissions",
+        "permissions",
+        "Perform general permission administration.",
+    ),
+    permission(
+        "audit_logs.view",
+        "View Audit Log",
+        "audit_logs",
+        "View an audit-log record.",
+    ),
+    permission(
+        "audit_logs.list",
+        "List Audit Logs",
+        "audit_logs",
+        "List and filter audit-log records.",
+    ),
+    permission(
+        "audit_logs.export",
+        "Export Audit Logs",
+        "audit_logs",
+        "Export audit-log records.",
+    ),
+    permission(
+        "user_activity.view",
+        "View User Activity Log",
+        "user_activity",
+        "View user-activity records.",
+    ),
+)
+
+
+WEEK_3_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "patient.create",
+        "Create Patient",
+        "patient",
+        "Register a new patient.",
+    ),
+    permission(
+        "patient.view",
+        "View Patient",
+        "patient",
+        "View a patient profile.",
+    ),
+    permission(
+        "patient.list",
+        "List Patients",
+        "patient",
+        "List patients.",
+    ),
+    permission(
+        "patient.search",
+        "Search Patients",
+        "patient",
+        "Search for patients.",
+    ),
+    permission(
+        "patient.update",
+        "Update Patient",
+        "patient",
+        "Update patient demographic and profile information.",
+    ),
+    permission(
+        "patient.activate",
+        "Activate Patient",
+        "patient",
+        "Activate a patient record.",
+    ),
+    permission(
+        "patient.deactivate",
+        "Deactivate Patient",
+        "patient",
+        "Deactivate a patient record.",
+    ),
+    permission(
+        "patient.archive",
+        "Archive Patient",
+        "patient",
+        "Archive a patient record.",
+    ),
+    permission(
+        "patient.restore",
+        "Restore Patient",
+        "patient",
+        "Restore an archived patient record.",
+    ),
+    permission(
+        "patient.view_sensitive_data",
+        "View Sensitive Patient Data",
+        "patient",
+        "View protected patient fields permitted by policy.",
+    ),
+    permission(
+        "patient.export",
+        "Export Patient Data",
+        "patient",
+        "Export patient data.",
+    ),
+    permission(
+        "patient_duplicate.check",
+        "Check Patient Duplicates",
+        "patient_duplicate",
+        "Run duplicate-patient detection.",
+    ),
+    permission(
+        "patient_duplicate.view_matches",
+        "View Duplicate Matches",
+        "patient_duplicate",
+        "View possible duplicate-patient matches.",
+    ),
+    permission(
+        "patient_duplicate.confirm_existing",
+        "Confirm Existing Patient",
+        "patient_duplicate",
+        "Select an existing patient instead of creating a duplicate.",
+    ),
+    permission(
+        "patient_duplicate.override",
+        "Override Duplicate Warning",
+        "patient_duplicate",
+        (
+            "Create a patient despite a duplicate warning with a "
+            "mandatory reason."
+        ),
+    ),
+    permission(
+        "patient_duplicate.merge",
+        "Merge Duplicate Patients",
+        "patient_duplicate",
+        "Merge verified duplicate patient records.",
+    ),
+    permission(
+        "patient_duplicate.dismiss",
+        "Dismiss Duplicate Match",
+        "patient_duplicate",
+        "Mark a possible duplicate as not matching.",
+    ),
+    permission(
+        "patient_address.create",
+        "Create Patient Address",
+        "patient_address",
+        "Add an address to a patient.",
+    ),
+    permission(
+        "patient_address.view",
+        "View Patient Address",
+        "patient_address",
+        "View a patient address.",
+    ),
+    permission(
+        "patient_address.update",
+        "Update Patient Address",
+        "patient_address",
+        "Update a patient address.",
+    ),
+    permission(
+        "patient_address.delete",
+        "Delete Patient Address",
+        "patient_address",
+        "Remove a patient address.",
+    ),
+    permission(
+        "patient_identifier.create",
+        "Create Patient Identifier",
+        "patient_identifier",
+        "Create a patient identifier.",
+    ),
+    permission(
+        "patient_identifier.view",
+        "View Patient Identifier",
+        "patient_identifier",
+        "View a patient identifier.",
+    ),
+    permission(
+        "patient_identifier.update",
+        "Update Patient Identifier",
+        "patient_identifier",
+        "Update a patient identifier.",
+    ),
+    permission(
+        "patient_identifier.deactivate",
+        "Deactivate Patient Identifier",
+        "patient_identifier",
+        "Deactivate an identifier while retaining history.",
+    ),
+    permission(
+        "patient_document.upload",
+        "Upload Patient Document",
+        "patient_document",
+        "Upload a patient document.",
+    ),
+    permission(
+        "patient_document.view",
+        "View Patient Document",
+        "patient_document",
+        "View patient-document metadata.",
+    ),
+    permission(
+        "patient_document.download",
+        "Download Patient Document",
+        "patient_document",
+        "Download a patient document.",
+    ),
+    permission(
+        "patient_document.update",
+        "Update Patient Document",
+        "patient_document",
+        "Update patient-document metadata.",
+    ),
+    permission(
+        "patient_document.delete",
+        "Delete Patient Document",
+        "patient_document",
+        "Soft-delete a patient document with an audit reason.",
+    ),
+    permission(
+        "patient_document.verify",
+        "Verify Patient Document",
+        "patient_document",
+        "Verify a patient document.",
+    ),
+)
+
+
+WEEK_4_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "medical_history.create",
+        "Create Medical History",
+        "medical_history",
+        "Create a medical-history record.",
+    ),
+    permission(
+        "medical_history.view",
+        "View Medical History",
+        "medical_history",
+        "View medical-history records.",
+    ),
+    permission(
+        "medical_history.update",
+        "Update Medical History",
+        "medical_history",
+        "Update a medical-history record.",
+    ),
+    permission(
+        "medical_history.delete",
+        "Delete Medical History",
+        "medical_history",
+        "Soft-delete a medical-history record with an audit reason.",
+    ),
+    permission(
+        "medical_history.view_audit",
+        "View Medical-History Audit",
+        "medical_history",
+        "View medical-history change events.",
+    ),
+    permission(
+        "patient_condition.create",
+        "Create Patient Condition",
+        "patient_condition",
+        "Record a previous or current patient condition.",
+    ),
+    permission(
+        "patient_condition.view",
+        "View Patient Condition",
+        "patient_condition",
+        "View patient conditions.",
+    ),
+    permission(
+        "patient_condition.update",
+        "Update Patient Condition",
+        "patient_condition",
+        "Update a patient condition.",
+    ),
+    permission(
+        "patient_condition.resolve",
+        "Resolve Patient Condition",
+        "patient_condition",
+        "Mark a patient condition as resolved.",
+    ),
+    permission(
+        "patient_condition.delete",
+        "Delete Patient Condition",
+        "patient_condition",
+        "Soft-delete a patient condition with an audit reason.",
+    ),
+    permission(
+        "patient_surgery.create",
+        "Create Surgery History",
+        "patient_surgery",
+        "Record a previous surgery.",
+    ),
+    permission(
+        "patient_surgery.view",
+        "View Surgery History",
+        "patient_surgery",
+        "View previous surgery records.",
+    ),
+    permission(
+        "patient_surgery.update",
+        "Update Surgery History",
+        "patient_surgery",
+        "Update a previous surgery record.",
+    ),
+    permission(
+        "patient_surgery.delete",
+        "Delete Surgery History",
+        "patient_surgery",
+        "Soft-delete a surgery record with an audit reason.",
+    ),
+    permission(
+        "existing_medicine.create",
+        "Create Existing Medicine",
+        "existing_medicine",
+        "Record a medicine the patient is already taking.",
+    ),
+    permission(
+        "existing_medicine.view",
+        "View Existing Medicine",
+        "existing_medicine",
+        "View medicines the patient is already taking.",
+    ),
+    permission(
+        "existing_medicine.update",
+        "Update Existing Medicine",
+        "existing_medicine",
+        "Update an existing-medicine record.",
+    ),
+    permission(
+        "existing_medicine.stop",
+        "Stop Existing Medicine",
+        "existing_medicine",
+        "Mark an existing medicine as stopped.",
+    ),
+    permission(
+        "existing_medicine.delete",
+        "Delete Existing Medicine",
+        "existing_medicine",
+        "Soft-delete an existing-medicine record with an audit reason.",
+    ),
+    permission(
+        "allergy.create",
+        "Create Allergy",
+        "allergy",
+        "Record a patient allergy.",
+    ),
+    permission(
+        "allergy.view",
+        "View Allergy",
+        "allergy",
+        "View patient allergies.",
+    ),
+    permission(
+        "allergy.update",
+        "Update Allergy",
+        "allergy",
+        "Update a patient allergy.",
+    ),
+    permission(
+        "allergy.deactivate",
+        "Deactivate Allergy",
+        "allergy",
+        "Deactivate an allergy while retaining history.",
+    ),
+    permission(
+        "allergy.delete",
+        "Delete Allergy",
+        "allergy",
+        "Soft-delete an allergy with an audit reason.",
+    ),
+    permission(
+        "allergy.view_alert",
+        "View Allergy Alert",
+        "allergy",
+        "View prominent allergy warnings.",
+    ),
+    permission(
+        "allergy.acknowledge_alert",
+        "Acknowledge Allergy Alert",
+        "allergy",
+        "Record that an allergy warning was reviewed.",
+    ),
+    permission(
+        "emergency_contact.create",
+        "Create Emergency Contact",
+        "emergency_contact",
+        "Add a patient emergency contact.",
+    ),
+    permission(
+        "emergency_contact.view",
+        "View Emergency Contact",
+        "emergency_contact",
+        "View patient emergency contacts.",
+    ),
+    permission(
+        "emergency_contact.update",
+        "Update Emergency Contact",
+        "emergency_contact",
+        "Update a patient emergency contact.",
+    ),
+    permission(
+        "emergency_contact.delete",
+        "Delete Emergency Contact",
+        "emergency_contact",
+        "Delete a patient emergency contact.",
+    ),
+    permission(
+        "emergency_contact.set_primary",
+        "Set Primary Emergency Contact",
+        "emergency_contact",
+        "Set the primary patient emergency contact.",
+    ),
+    permission(
+        "emergency_contact.verify",
+        "Verify Emergency Contact",
+        "emergency_contact",
+        "Verify a patient emergency contact.",
+    ),
+    permission(
+        "consent_template.create",
+        "Create Consent Template",
+        "consent_template",
+        "Create a consent-form template.",
+    ),
+    permission(
+        "consent_template.view",
+        "View Consent Template",
+        "consent_template",
+        "View a consent-form template.",
+    ),
+    permission(
+        "consent_template.list",
+        "List Consent Templates",
+        "consent_template",
+        "List consent-form templates.",
+    ),
+    permission(
+        "consent_template.update",
+        "Update Consent Template",
+        "consent_template",
+        "Update a consent-form template.",
+    ),
+    permission(
+        "consent_template.activate",
+        "Activate Consent Template",
+        "consent_template",
+        "Activate a consent-form template.",
+    ),
+    permission(
+        "consent_template.deactivate",
+        "Deactivate Consent Template",
+        "consent_template",
+        "Deactivate a consent-form template.",
+    ),
+    permission(
+        "consent_template.delete",
+        "Delete Consent Template",
+        "consent_template",
+        "Delete an unused consent-form template.",
+    ),
+    permission(
+        "patient_consent.create",
+        "Create Patient Consent",
+        "patient_consent",
+        "Create a patient-consent record.",
+    ),
+    permission(
+        "patient_consent.view",
+        "View Patient Consent",
+        "patient_consent",
+        "View a patient-consent record.",
+    ),
+    permission(
+        "patient_consent.capture",
+        "Capture Patient Consent",
+        "patient_consent",
+        "Capture digital patient consent and signature data.",
+    ),
+    permission(
+        "patient_consent.upload",
+        "Upload Patient Consent",
+        "patient_consent",
+        "Upload a signed consent document.",
+    ),
+    permission(
+        "patient_consent.download",
+        "Download Patient Consent",
+        "patient_consent",
+        "Download a patient-consent document.",
+    ),
+    permission(
+        "patient_consent.revoke",
+        "Revoke Patient Consent",
+        "patient_consent",
+        "Record patient-consent revocation without deleting history.",
+    ),
+    permission(
+        "patient_consent.verify",
+        "Verify Patient Consent",
+        "patient_consent",
+        "Verify a captured or uploaded consent.",
+    ),
+)
+
+
+APPLICATION_PERMISSION_CODES = (
+    "rbac.manage",
+    "workflow.configure",
+    "audit.view",
+    "reports.view",
+    "appointment.create",
+    "appointment.manage",
+    "billing.collect",
+    "consent.manage",
+    "consultation.create",
+    "allergy.manage",
+    "treatment_plan.create",
+    "treatment_plan.update",
+    "treatment_plan.prepare",
+    "treatment_plan.review",
+    "treatment_plan.approve",
+    "treatment_plan.finalize",
+    "pharmacy.dispense",
+)
+
+APPLICATION_PERMISSIONS: tuple[PermissionSeed, ...] = tuple(
+    permission(
+        code,
+        code.replace("_", " ").replace(".", " ").title(),
+        code.split(".", 1)[0],
+        f"Allows {code}.",
+    )
+    for code in APPLICATION_PERMISSION_CODES
+)
+
+
+ALL_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    *WEEK_1_PERMISSIONS,
+    *WEEK_2_PERMISSIONS,
+    *WEEK_3_PERMISSIONS,
+    *WEEK_4_PERMISSIONS,
+    *APPLICATION_PERMISSIONS,
+)
+
+
+def validate_permission_seeds() -> None:
+    codes = [item.code for item in ALL_PERMISSIONS]
+
+    duplicate_codes = {code for code in codes if codes.count(code) > 1}
+
+    if duplicate_codes:
+        raise ValueError(
+            "Duplicate permission codes found: " f"{sorted(duplicate_codes)}"
+        )
+
+
+def _permission_values(
+    seed: PermissionSeed,
+) -> dict:
+    """
+    Return only values supported by the Permission model.
+
+    Required model column:
+    - code
+
+    Supported optional columns:
+    - name
+    - module
+    - description
+    - is_active
+    - is_system
+    - is_system_permission
+    """
+    available_columns = {column.key for column in Permission.__table__.columns}
+
+    values = {
+        "code": seed.code,
+        "name": seed.name,
+        "module": seed.module,
+        "action": seed.code.split(".", 1)[1],
+        "description": seed.description,
+        "is_active": True,
+        "is_system": True,
+        "is_system_permission": True,
+    }
+
+    return {
+        key: value for key, value in values.items() if key in available_columns
+    }
+
+
+def _update_permission(
+    permission_row: Permission,
+    seed: PermissionSeed,
+) -> None:
+    available_columns = {column.key for column in Permission.__table__.columns}
+
+    values = {
+        "name": seed.name,
+        "module": seed.module,
+        "action": seed.code.split(".", 1)[1],
+        "description": seed.description,
+        "is_active": True,
+        "is_system": True,
+        "is_system_permission": True,
+    }
+
+    for key, value in values.items():
+        if key in available_columns:
+            setattr(
+                permission_row,
+                key,
+                value,
+            )
+
+
+async def seed_permissions(
+    db: AsyncSession,
+) -> dict[str, int]:
+    """
+    Create or update all Week 1-4 permissions.
+
+    This function is idempotent:
+    - existing permissions are matched using Permission.code;
+    - existing rows are updated;
+    - duplicate permission rows are not created.
+    """
+    validate_permission_seeds()
+
+    created = 0
+    updated = 0
+
+    try:
+        for seed in ALL_PERMISSIONS:
+            result = await db.execute(
+                select(Permission).where(Permission.code == seed.code)
+            )
+            existing_permission = result.scalar_one_or_none()
+
+            if existing_permission is None:
+                db.add(Permission(**_permission_values(seed)))
+                created += 1
+            else:
+                _update_permission(
+                    existing_permission,
+                    seed,
+                )
+                updated += 1
+
+        await db.commit()
+
+        return {
+            "created": created,
+            "updated": updated,
+            "total": len(ALL_PERMISSIONS),
+        }
+
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def main() -> None:
+    async with AsyncSessionLocal() as db:
+        result = await seed_permissions(db)
+    await engine.dispose()
+
+    logger.info(
+        "Permission seed completed: %s",
+        result,
+    )
+
+    print(
+        "Permission seed completed | "
+        f"created={result['created']} | "
+        f"updated={result['updated']} | "
+        f"total={result['total']}"
+    )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format=("%(asctime)s | %(levelname)s | " "%(name)s | %(message)s"),
+    )
+    asyncio.run(main())

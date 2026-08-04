@@ -33,7 +33,6 @@ from app.modules.patients.portal.service import (
     PatientPortalService,
 )
 
-
 router = APIRouter()
 
 
@@ -45,28 +44,20 @@ def create_document_data(
     download_url = str(
         request.url_for(
             "download_patient_document",
-            document_id=str(
-                document.id
-            ),
+            document_id=str(document.id),
         )
     )
 
     return PatientDocumentData(
         id=document.id,
         patient_id=document.patient_id,
-        document_type=(
-            document.document_type
-        ),
+        document_type=(document.document_type),
         title=document.title,
-        original_file_name=(
-            document.original_file_name
-        ),
+        original_file_name=(document.original_file_name),
         file_url=download_url,
         mime_type=document.mime_type,
         file_size=document.file_size,
-        uploaded_by=(
-            document.uploaded_by
-        ),
+        uploaded_by=(document.uploaded_by),
         created_at=document.created_at,
     )
 
@@ -81,19 +72,13 @@ async def get_patient_dashboard(
     current_patient: CurrentPatient,
     db: AsyncSession = Depends(get_db),
 ):
-    dashboard = (
-        await PatientPortalService
-        .get_dashboard(
-            db=db,
-            patient=current_patient,
-        )
+    dashboard = await PatientPortalService.get_dashboard(
+        db=db,
+        patient=current_patient,
     )
 
     return PatientDashboardResponse(
-        message=(
-            "Patient dashboard retrieved "
-            "successfully"
-        ),
+        message=("Patient dashboard retrieved " "successfully"),
         data=dashboard,
     )
 
@@ -107,18 +92,12 @@ async def get_patient_dashboard(
 async def get_patient_profile(
     current_patient: CurrentPatient,
 ):
-    profile = (
-        PatientPortalService
-        .get_profile(
-            patient=current_patient,
-        )
+    profile = PatientPortalService.get_profile(
+        patient=current_patient,
     )
 
     return PatientProfileResponse(
-        message=(
-            "Patient profile retrieved "
-            "successfully"
-        ),
+        message=("Patient profile retrieved " "successfully"),
         data=profile,
     )
 
@@ -134,20 +113,14 @@ async def update_patient_profile(
     current_patient: CurrentPatient,
     db: AsyncSession = Depends(get_db),
 ):
-    profile = (
-        await PatientPortalService
-        .update_profile(
-            db=db,
-            patient=current_patient,
-            payload=payload,
-        )
+    profile = await PatientPortalService.update_profile(
+        db=db,
+        patient=current_patient,
+        payload=payload,
     )
 
     return PatientProfileResponse(
-        message=(
-            "Patient profile updated "
-            "successfully"
-        ),
+        message=("Patient profile updated " "successfully"),
         data=profile,
     )
 
@@ -163,12 +136,9 @@ async def list_patient_documents(
     current_patient: CurrentPatient,
     db: AsyncSession = Depends(get_db),
 ):
-    documents = (
-        await PatientPortalService
-        .list_documents(
-            db=db,
-            patient=current_patient,
-        )
+    documents = await PatientPortalService.list_documents(
+        db=db,
+        patient=current_patient,
     )
 
     document_items = [
@@ -180,10 +150,7 @@ async def list_patient_documents(
     ]
 
     return PatientDocumentListResponse(
-        message=(
-            "Patient documents retrieved "
-            "successfully"
-        ),
+        message=("Patient documents retrieved " "successfully"),
         data=PatientDocumentListData(
             documents=document_items,
             total=len(document_items),
@@ -210,24 +177,17 @@ async def upload_patient_document(
     ),
     file: UploadFile = File(...),
 ):
-    document = (
-        await PatientPortalService
-        .upload_document(
-            db=db,
-            patient=current_patient,
-            user_id=current_user.id,
-            upload_file=file,
-            document_type=(
-                document_type.value
-            ),
-            title=title,
-        )
+    document = await PatientPortalService.upload_document(
+        db=db,
+        patient=current_patient,
+        user_id=current_user.id,
+        upload_file=file,
+        document_type=(document_type.value),
+        title=title,
     )
 
     return PatientDocumentResponse(
-        message=(
-            "Document uploaded successfully"
-        ),
+        message=("Document uploaded successfully"),
         data=create_document_data(
             request=request,
             document=document,
@@ -249,21 +209,16 @@ async def download_patient_document(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    document, file_path = (
-        await PatientPortalService
-        .get_document_file(
-            db=db,
-            patient=current_patient,
-            document_id=document_id,
-        )
+    document, file_path = await PatientPortalService.get_document_file(
+        db=db,
+        patient=current_patient,
+        document_id=document_id,
     )
 
     return FileResponse(
         path=file_path,
         media_type=document.mime_type,
-        filename=(
-            document.original_file_name
-        ),
+        filename=(document.original_file_name),
     )
 
 
@@ -281,19 +236,14 @@ async def delete_patient_document(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    document = (
-        await PatientPortalService
-        .delete_document(
-            db=db,
-            patient=current_patient,
-            document_id=document_id,
-        )
+    document = await PatientPortalService.delete_document(
+        db=db,
+        patient=current_patient,
+        document_id=document_id,
     )
 
     return PatientDocumentDeleteResponse(
-        message=(
-            "Document deleted successfully"
-        ),
+        message=("Document deleted successfully"),
         data={
             "document_id": document.id,
         },

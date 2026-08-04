@@ -6,20 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.auth.model import UserSession
+from app.modules.auth.model import RefreshToken, UserSession
 from app.modules.auth.password_reset_model import PasswordResetToken
-from app.modules.auth.password_reset_repository import (
-    PasswordResetRepository,
-)
+from app.modules.auth.password_reset_repository import PasswordResetRepository
 from app.modules.auth.password_service import PasswordService
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schema import RegisterRequest, UserProfileUpdateRequest
 from app.modules.auth.token_service import TokenService
+from app.modules.rbac.repository import RBACRepository
 from app.modules.users.model import User, UserStatus
 from app.modules.users.repository import UserRepository
-
-
-from app.modules.rbac.repository import RBACRepository
 
 
 class AuthService:
@@ -68,7 +64,10 @@ class AuthService:
                     phone=phone,
                 )
 
-                if existing_user is not None and existing_user.id != current_user.id:
+                if (
+                    existing_user is not None
+                    and existing_user.id != current_user.id
+                ):
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Phone number is already in use",
@@ -363,6 +362,15 @@ class AuthService:
         )
 
         if user is None:
+            await AuthRepository.record_login_attempt(
+                db,
+                email=normalized_email,
+                was_successful=False,
+                failure_reason="invalid_credentials",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
@@ -397,9 +405,21 @@ class AuthService:
         if not password_is_valid:
             user.failed_login_attempts += 1
 
-            if user.failed_login_attempts >= 5:
+            if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
                 user.status = UserStatus.LOCKED.value
-                user.locked_until = current_time + timedelta(minutes=15)
+                user.locked_until = current_time + timedelta(
+                    minutes=settings.ACCOUNT_LOCK_MINUTES
+                )
+
+            await AuthRepository.record_login_attempt(
+                db,
+                email=normalized_email,
+                user_id=user.id,
+                was_successful=False,
+                failure_reason="invalid_credentials",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
             try:
                 await db.commit()
@@ -488,7 +508,8 @@ class AuthService:
             user_agent=user_agent,
             ip_address=ip_address,
             expires_at=(
-                current_time + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+                current_time
+                + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
             ),
             is_active=True,
         )
@@ -514,7 +535,28 @@ class AuthService:
                 role_id=selected_role.id,
             )
 
-            created_session.refresh_token_hash = TokenService.hash_token(refresh_token)
+            created_session.refresh_token_hash = TokenService.hash_token(
+                refresh_token
+            )
+
+            await AuthRepository.create_refresh_token(
+                db,
+                RefreshToken(
+                    user_id=user.id,
+                    session_id=created_session.id,
+                    token_hash=created_session.refresh_token_hash,
+                    expires_at=created_session.expires_at,
+                ),
+            )
+
+            await AuthRepository.record_login_attempt(
+                db,
+                email=normalized_email,
+                user_id=user.id,
+                was_successful=True,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
             user.failed_login_attempts = 0
             user.locked_until = None
@@ -593,7 +635,11 @@ class AuthService:
                 detail="Invalid token type",
             )
 
-        if user_id_value is None or session_id_value is None or role_id_value is None:
+        if (
+            user_id_value is None
+            or session_id_value is None
+            or role_id_value is None
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token payload",
@@ -662,7 +708,11 @@ class AuthService:
         )
 
         selected_role = next(
-            (role for role in user_roles if role.id == role_id and role.is_active),
+            (
+                role
+                for role in user_roles
+                if role.id == role_id and role.is_active
+            ),
             None,
         )
 
@@ -721,6 +771,17 @@ class AuthService:
                 session=session,
                 refresh_token_hash=new_refresh_token_hash,
                 expires_at=new_expiry,
+            )
+
+            await AuthRepository.rotate_refresh_token(
+                db,
+                old_hash=TokenService.hash_token(refresh_token),
+                replacement=RefreshToken(
+                    user_id=user.id,
+                    session_id=session.id,
+                    token_hash=new_refresh_token_hash,
+                    expires_at=new_expiry,
+                ),
             )
 
             await db.commit()
@@ -940,7 +1001,9 @@ class AuthService:
         if current_and_new_are_same:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=("New password must be different " "from current password"),
+                detail=(
+                    "New password must be different " "from current password"
+                ),
             )
 
         try:
@@ -974,7 +1037,9 @@ class AuthService:
 
         return {
             "success": True,
-            "message": ("Password changed successfully. " "Please log in again."),
+            "message": (
+                "Password changed successfully. " "Please log in again."
+            ),
             "data": {
                 "revoked_sessions": revoked_sessions,
             },
@@ -1013,7 +1078,9 @@ class AuthService:
 
         plain_reset_token = TokenService.create_password_reset_token()
 
-        reset_token_hash = TokenService.hash_password_reset_token(plain_reset_token)
+        reset_token_hash = TokenService.hash_password_reset_token(
+            plain_reset_token
+        )
 
         reset_token = PasswordResetToken(
             user_id=user.id,
@@ -1081,7 +1148,9 @@ class AuthService:
                 detail=str(exc),
             ) from exc
 
-        reset_token_hash = TokenService.hash_password_reset_token(cleaned_token)
+        reset_token_hash = TokenService.hash_password_reset_token(
+            cleaned_token
+        )
 
         reset_token = await PasswordResetRepository.get_valid_by_hash(
             db=db,
@@ -1119,7 +1188,10 @@ class AuthService:
         if same_as_current_password:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=("New password must be different " "from the current password"),
+                detail=(
+                    "New password must be different "
+                    "from the current password"
+                ),
             )
 
         new_password_hash = PasswordService.hash_password(new_password)
@@ -1149,7 +1221,9 @@ class AuthService:
 
         return {
             "success": True,
-            "message": ("Password reset successfully. " "Please log in again."),
+            "message": (
+                "Password reset successfully. " "Please log in again."
+            ),
             "data": {
                 "revoked_sessions": revoked_sessions,
             },

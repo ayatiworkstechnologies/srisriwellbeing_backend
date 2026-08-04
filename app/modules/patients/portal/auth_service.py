@@ -22,9 +22,7 @@ class PatientPortalAuthService:
         user: User,
     ) -> Patient:
         linked_result = await db.execute(
-            select(Patient).where(
-                Patient.user_id == user.id
-            )
+            select(Patient).where(Patient.user_id == user.id)
         )
         linked_patient = linked_result.scalar_one_or_none()
 
@@ -36,9 +34,7 @@ class PatientPortalAuthService:
         ]
 
         if user.phone:
-            identity_filters.append(
-                Patient.mobile_number == user.phone
-            )
+            identity_filters.append(Patient.mobile_number == user.phone)
 
         existing_result = await db.execute(
             select(Patient)
@@ -86,16 +82,10 @@ class PatientPortalAuthService:
 
         name_parts = user.full_name.strip().split(maxsplit=1)
         first_name = name_parts[0][:100]
-        last_name = (
-            name_parts[1][:100]
-            if len(name_parts) > 1
-            else None
-        )
+        last_name = name_parts[1][:100] if len(name_parts) > 1 else None
         patient = Patient(
             user_id=user.id,
-            patient_code=(
-                await PatientService.generate_patient_code(db=db)
-            ),
+            patient_code=(await PatientService.generate_patient_code(db=db)),
             first_name=first_name,
             middle_name=None,
             last_name=last_name,
@@ -133,14 +123,10 @@ class PatientPortalAuthService:
         payload: PatientRegisterRequest,
     ) -> dict:
         try:
-            PasswordService.validate_password(
-                payload.password
-            )
+            PasswordService.validate_password(payload.password)
         except ValueError as exc:
             raise HTTPException(
-                status_code=(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY
-                ),
+                status_code=(status.HTTP_422_UNPROCESSABLE_ENTITY),
                 detail=str(exc),
             ) from exc
 
@@ -174,23 +160,17 @@ class PatientPortalAuthService:
         if existing_phone is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "A user with this phone number already exists"
-                ),
+                detail=("A user with this phone number already exists"),
             )
 
         existing_patient_result = await db.execute(
-            select(Patient.id).where(
-                Patient.mobile_number == payload.phone
-            )
+            select(Patient.id).where(Patient.mobile_number == payload.phone)
         )
 
         if existing_patient_result.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "A patient with this phone number already exists"
-                ),
+                detail=("A patient with this phone number already exists"),
             )
 
         patient_code = await PatientService.generate_patient_code(
@@ -202,9 +182,7 @@ class PatientPortalAuthService:
             full_name=payload.full_name,
             email=payload.email,
             phone=payload.phone,
-            password_hash=PasswordService.hash_password(
-                payload.password
-            ),
+            password_hash=PasswordService.hash_password(payload.password),
             status=UserStatus.ACTIVE.value,
             is_active=True,
             is_verified=False,

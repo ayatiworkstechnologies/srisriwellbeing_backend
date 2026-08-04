@@ -76,9 +76,7 @@ class PatientRepository:
         if status:
             filters.append(Patient.status == status)
 
-        count_statement = select(
-            func.count(Patient.id)
-        )
+        count_statement = select(func.count(Patient.id))
 
         list_statement = (
             select(Patient)
@@ -91,9 +89,7 @@ class PatientRepository:
             count_statement = count_statement.where(*filters)
             list_statement = list_statement.where(*filters)
 
-        total = int(
-            await db.scalar(count_statement) or 0
-        )
+        total = int(await db.scalar(count_statement) or 0)
 
         result = await db.execute(list_statement)
 

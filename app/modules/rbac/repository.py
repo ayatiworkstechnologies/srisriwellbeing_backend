@@ -1,52 +1,59 @@
-from sqlalchemy import  delete, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.rbac.association import RolePermission
+from app.modules.rbac.association import RolePermission, UserRole
 from app.modules.rbac.model import Permission, Role
-
-from app.modules.rbac.association import UserRole
-from app.modules.users.model import User
 
 
 class RBACRepository:
     @staticmethod
+    async def delete_role(db: AsyncSession, role: Role) -> None:
+        await db.delete(role)
+        await db.flush()
+
+    @staticmethod
+    async def delete_permission(
+        db: AsyncSession,
+        permission: Permission,
+    ) -> None:
+        await db.delete(permission)
+        await db.flush()
+
+    @staticmethod
     async def get_permissions_by_ids(
-    db: AsyncSession,
-    permission_ids: list[int],
-) -> list[Permission]:
-     if not permission_ids:
-        return []
+        db: AsyncSession,
+        permission_ids: list[int],
+    ) -> list[Permission]:
+        if not permission_ids:
+            return []
 
-     result = await db.execute(
-        select(Permission).where(
-            Permission.id.in_(permission_ids),
-            Permission.is_active.is_(True),
+        result = await db.execute(
+            select(Permission).where(
+                Permission.id.in_(permission_ids),
+                Permission.is_active.is_(True),
+            )
         )
-    )
 
-     return list(result.scalars().all())
-
+        return list(result.scalars().all())
 
     @staticmethod
     async def replace_role_permissions(
-    db: AsyncSession,
-    role_id: int,
-    permission_ids: list[int],
-) -> None:
-     await db.execute(
-        delete(RolePermission).where(
-            RolePermission.role_id == role_id
+        db: AsyncSession,
+        role_id: int,
+        permission_ids: list[int],
+    ) -> None:
+        await db.execute(
+            delete(RolePermission).where(RolePermission.role_id == role_id)
         )
-    )
 
-     for permission_id in permission_ids:
-        db.add(
-            RolePermission(
-                role_id=role_id,
-                permission_id=permission_id,
+        for permission_id in permission_ids:
+            db.add(
+                RolePermission(
+                    role_id=role_id,
+                    permission_id=permission_id,
+                )
             )
-        )
 
     @staticmethod
     async def create_role(
@@ -106,9 +113,7 @@ class RBACRepository:
 
         result = await db.execute(statement)
 
-        return list(
-            result.scalars().unique().all()
-        )
+        return list(result.scalars().unique().all())
 
     @staticmethod
     async def create_permission(
@@ -160,7 +165,7 @@ class RBACRepository:
         result = await db.execute(statement)
 
         return list(result.scalars().all())
-    
+
     @staticmethod
     async def get_roles_by_ids(
         db: AsyncSession,
@@ -178,18 +183,13 @@ class RBACRepository:
 
         return list(result.scalars().all())
 
-
     @staticmethod
     async def replace_user_roles(
         db: AsyncSession,
         user_id: int,
         role_ids: list[int],
     ) -> None:
-        await db.execute(
-            delete(UserRole).where(
-                UserRole.user_id == user_id
-            )
-        )
+        await db.execute(delete(UserRole).where(UserRole.user_id == user_id))
 
         for role_id in role_ids:
             db.add(
@@ -198,7 +198,6 @@ class RBACRepository:
                     role_id=role_id,
                 )
             )
-
 
     @staticmethod
     async def get_user_roles(
@@ -211,9 +210,7 @@ class RBACRepository:
                 UserRole,
                 UserRole.role_id == Role.id,
             )
-            .options(
-                selectinload(Role.permissions)
-            )
+            .options(selectinload(Role.permissions))
             .where(
                 UserRole.user_id == user_id,
                 Role.is_active.is_(True),

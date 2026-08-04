@@ -10,7 +10,6 @@ from pydantic import (
     model_validator,
 )
 
-
 BloodGroup = Literal[
     "A+",
     "A-",
@@ -82,23 +81,17 @@ class PatientRegisterRequest(BaseModel):
         )
 
         if not number_part.isdigit():
-            raise ValueError(
-                "Phone number must contain only digits"
-            )
+            raise ValueError("Phone number must contain only digits")
 
         if len(number_part) < 10:
-            raise ValueError(
-                "Phone number must contain at least 10 digits"
-            )
+            raise ValueError("Phone number must contain at least 10 digits")
 
         return cleaned_phone
 
     @model_validator(mode="after")
     def validate_matching_passwords(self):
         if self.password != self.confirm_password:
-            raise ValueError(
-                "Password and confirm password do not match"
-            )
+            raise ValueError("Password and confirm password do not match")
 
         return self
 
@@ -198,11 +191,14 @@ class PatientProfileUpdate(BaseModel):
 
     date_of_birth: date | None = None
 
-    gender: Literal[
-        "male",
-        "female",
-        "other",
-    ] | None = None
+    gender: (
+        Literal[
+            "male",
+            "female",
+            "other",
+        ]
+        | None
+    ) = None
 
     blood_group: BloodGroup | None = None
 
@@ -249,13 +245,8 @@ class PatientProfileUpdate(BaseModel):
         cls,
         value: date | None,
     ) -> date | None:
-        if (
-            value is not None
-            and value > date.today()
-        ):
-            raise ValueError(
-                "Date of birth cannot be in the future"
-            )
+        if value is not None and value > date.today():
+            raise ValueError("Date of birth cannot be in the future")
 
         return value
 

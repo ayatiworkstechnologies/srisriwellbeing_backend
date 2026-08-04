@@ -11,7 +11,6 @@ from app.modules.auth.token_service import TokenService
 from app.modules.users.model import User
 from app.modules.users.repository import UserRepository
 
-
 bearer_scheme = HTTPBearer(
     scheme_name="JWT Bearer",
     description="Enter the JWT access token",
@@ -50,9 +49,7 @@ async def get_auth_context(
         raise unauthorized
 
     try:
-        payload = TokenService.decode_token(
-            credentials.credentials
-        )
+        payload = TokenService.decode_token(credentials.credentials)
 
         if payload.get("token_type") != "access":
             raise unauthorized

@@ -34,12 +34,9 @@ class PatientPortalService:
         db: AsyncSession,
         patient: Patient,
     ) -> PatientDashboardData:
-        document_count = (
-            await PatientPortalRepository
-            .count_documents(
-                db=db,
-                patient_id=patient.id,
-            )
+        document_count = await PatientPortalRepository.count_documents(
+            db=db,
+            patient_id=patient.id,
         )
 
         full_name = " ".join(
@@ -56,34 +53,18 @@ class PatientPortalService:
             patient=(
                 PatientDashboardPatientData(
                     id=patient.id,
-                    patient_code=(
-                        patient.patient_code
-                    ),
-                    first_name=(
-                        patient.first_name
-                    ),
-                    middle_name=(
-                        patient.middle_name
-                    ),
-                    last_name=(
-                        patient.last_name
-                    ),
+                    patient_code=(patient.patient_code),
+                    first_name=(patient.first_name),
+                    middle_name=(patient.middle_name),
+                    last_name=(patient.last_name),
                     full_name=full_name,
                     email=patient.email,
-                    mobile_number=(
-                        patient.mobile_number
-                    ),
-                    date_of_birth=(
-                        patient.date_of_birth
-                    ),
+                    mobile_number=(patient.mobile_number),
+                    date_of_birth=(patient.date_of_birth),
                     gender=patient.gender,
-                    blood_group=(
-                        patient.blood_group
-                    ),
+                    blood_group=(patient.blood_group),
                     status=patient.status,
-                    created_at=(
-                        patient.created_at
-                    ),
+                    created_at=(patient.created_at),
                 )
             ),
             summary=(
@@ -100,10 +81,7 @@ class PatientPortalService:
     def get_profile(
         patient: Patient,
     ) -> PatientProfileData:
-        return (
-            PatientProfileData
-            .model_validate(patient)
-        )
+        return PatientProfileData.model_validate(patient)
 
     @staticmethod
     async def update_profile(
@@ -111,15 +89,11 @@ class PatientPortalService:
         patient: Patient,
         payload: PatientProfileUpdate,
     ) -> PatientProfileData:
-        update_data = (
-            payload.model_dump(
-                exclude_unset=True,
-            )
+        update_data = payload.model_dump(
+            exclude_unset=True,
         )
 
-        for field_name, field_value in (
-            update_data.items()
-        ):
+        for field_name, field_value in update_data.items():
             setattr(
                 patient,
                 field_name,
@@ -136,11 +110,7 @@ class PatientPortalService:
             if value
         )
 
-        patient.normalized_full_name = (
-            normalized_name
-            .strip()
-            .lower()
-        )
+        patient.normalized_full_name = normalized_name.strip().lower()
 
         await PatientPortalRepository.save_patient(
             db=db,
@@ -150,22 +120,16 @@ class PatientPortalService:
         await db.commit()
         await db.refresh(patient)
 
-        return (
-            PatientProfileData
-            .model_validate(patient)
-        )
+        return PatientProfileData.model_validate(patient)
 
     @staticmethod
     async def list_documents(
         db: AsyncSession,
         patient: Patient,
     ) -> list[PatientDocument]:
-        return (
-            await PatientPortalRepository
-            .list_documents(
-                db=db,
-                patient_id=patient.id,
-            )
+        return await PatientPortalRepository.list_documents(
+            db=db,
+            patient_id=patient.id,
         )
 
     @staticmethod
@@ -178,50 +142,23 @@ class PatientPortalService:
         document_type: str,
         title: str,
     ) -> PatientDocument:
-        stored_file = (
-            await save_patient_document(
-                upload_file=upload_file,
-                patient_id=patient.id,
-            )
+        stored_file = await save_patient_document(
+            upload_file=upload_file,
+            patient_id=patient.id,
         )
 
         try:
-            document = (
-                await PatientPortalRepository
-                .create_document(
-                    db=db,
-                    patient_id=patient.id,
-                    document_type=(
-                        document_type
-                    ),
-                    title=title.strip(),
-                    original_file_name=(
-                        stored_file[
-                            "original_file_name"
-                        ]
-                    ),
-                    stored_file_name=(
-                        stored_file[
-                            "stored_file_name"
-                        ]
-                    ),
-                    file_path=(
-                        stored_file[
-                            "file_path"
-                        ]
-                    ),
-                    mime_type=(
-                        stored_file[
-                            "mime_type"
-                        ]
-                    ),
-                    file_size=(
-                        stored_file[
-                            "file_size"
-                        ]
-                    ),
-                    uploaded_by=user_id,
-                )
+            document = await PatientPortalRepository.create_document(
+                db=db,
+                patient_id=patient.id,
+                document_type=(document_type),
+                title=title.strip(),
+                original_file_name=(stored_file["original_file_name"]),
+                stored_file_name=(stored_file["stored_file_name"]),
+                file_path=(stored_file["file_path"]),
+                mime_type=(stored_file["mime_type"]),
+                file_size=(stored_file["file_size"]),
+                uploaded_by=user_id,
             )
 
             await db.commit()
@@ -231,11 +168,7 @@ class PatientPortalService:
         except Exception:
             await db.rollback()
 
-            await delete_stored_document(
-                stored_file.get(
-                    "file_path"
-                )
-            )
+            await delete_stored_document(stored_file.get("file_path"))
 
             raise
 
@@ -245,20 +178,15 @@ class PatientPortalService:
         patient: Patient,
         document_id: int,
     ) -> PatientDocument:
-        document = (
-            await PatientPortalRepository
-            .get_document(
-                db=db,
-                patient_id=patient.id,
-                document_id=document_id,
-            )
+        document = await PatientPortalRepository.get_document(
+            db=db,
+            patient_id=patient.id,
+            document_id=document_id,
         )
 
         if document is None:
             raise HTTPException(
-                status_code=(
-                    status.HTTP_404_NOT_FOUND
-                ),
+                status_code=(status.HTTP_404_NOT_FOUND),
                 detail="Document not found",
             )
 
@@ -273,20 +201,13 @@ class PatientPortalService:
         PatientDocument,
         Path,
     ]:
-        document = (
-            await PatientPortalService
-            .get_document(
-                db=db,
-                patient=patient,
-                document_id=document_id,
-            )
+        document = await PatientPortalService.get_document(
+            db=db,
+            patient=patient,
+            document_id=document_id,
         )
 
-        file_path = (
-            get_safe_document_path(
-                document.file_path
-            )
-        )
+        file_path = get_safe_document_path(document.file_path)
 
         return document, file_path
 
@@ -296,13 +217,10 @@ class PatientPortalService:
         patient: Patient,
         document_id: int,
     ) -> PatientDocument:
-        document = (
-            await PatientPortalService
-            .get_document(
-                db=db,
-                patient=patient,
-                document_id=document_id,
-            )
+        document = await PatientPortalService.get_document(
+            db=db,
+            patient=patient,
+            document_id=document_id,
         )
 
         file_path = document.file_path
@@ -314,8 +232,6 @@ class PatientPortalService:
 
         await db.commit()
 
-        await delete_stored_document(
-            file_path
-        )
+        await delete_stored_document(file_path)
 
         return document

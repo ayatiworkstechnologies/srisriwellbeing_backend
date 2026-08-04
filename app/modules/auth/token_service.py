@@ -20,7 +20,9 @@ class TokenService:
     ) -> str:
         now = datetime.now(timezone.utc)
 
-        expires_at = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = now + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
         payload = {
             "sub": str(user_id),

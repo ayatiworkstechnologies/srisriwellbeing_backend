@@ -61,6 +61,7 @@ class UserResponse(BaseModel):
         default_factory=list,
     )
 
+
 class UserListResponse(BaseModel):
     success: bool
     message: str

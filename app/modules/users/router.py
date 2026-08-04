@@ -26,7 +26,6 @@ from app.modules.users.schema import (
 )
 from app.modules.users.service import UserService
 
-
 router = APIRouter(
     prefix="/users",
     tags=["Users"],
@@ -72,9 +71,7 @@ async def get_users(
         le=100,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.view")
-    ),
+    current_user: User = Depends(require_permission("users.view")),
 ) -> dict:
     users = await UserService.get_users(
         db=db,
@@ -83,9 +80,7 @@ async def get_users(
     )
 
     serialized_users = [
-        UserResponse.model_validate(user).model_dump(
-            mode="json"
-        )
+        UserResponse.model_validate(user).model_dump(mode="json")
         for user in users
     ]
 
@@ -100,20 +95,14 @@ async def get_users(
 async def get_user(
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.view")
-    ),
+    current_user: User = Depends(require_permission("users.view")),
 ) -> dict:
     user = await UserService.get_user(
         db=db,
         user_id=user_id,
     )
 
-    serialized_user = (
-        UserResponse.model_validate(user).model_dump(
-            mode="json"
-        )
-    )
+    serialized_user = UserResponse.model_validate(user).model_dump(mode="json")
 
     return {
         "success": True,
@@ -130,9 +119,7 @@ async def create_user(
     payload: UserCreateRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.create")
-    ),
+    current_user: User = Depends(require_permission("users.create")),
 ) -> dict:
     try:
         user = await UserService.create_user(
@@ -159,9 +146,7 @@ async def create_user(
         return {
             "success": True,
             "message": "User created successfully",
-            "data": UserResponse.model_validate(
-                user
-            ).model_dump(mode="json"),
+            "data": UserResponse.model_validate(user).model_dump(mode="json"),
         }
 
     except Exception:
@@ -175,9 +160,7 @@ async def update_user(
     request: Request,
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.update")
-    ),
+    current_user: User = Depends(require_permission("users.update")),
 ) -> dict:
     try:
         existing_user = await UserService.get_user(
@@ -202,9 +185,7 @@ async def update_user(
             module="users",
             entity_type="User",
             entity_id=updated_user.id,
-            description=(
-                f"Updated user {updated_user.email}"
-            ),
+            description=(f"Updated user {updated_user.email}"),
             old_values=old_values,
             new_values=new_values,
             ip_address=get_client_ip(request),
@@ -214,10 +195,8 @@ async def update_user(
         await db.commit()
         await db.refresh(updated_user)
 
-        serialized_user = (
-            UserResponse.model_validate(
-                updated_user
-            ).model_dump(mode="json")
+        serialized_user = UserResponse.model_validate(updated_user).model_dump(
+            mode="json"
         )
 
         return {
@@ -236,9 +215,7 @@ async def delete_user(
     request: Request,
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.delete")
-    ),
+    current_user: User = Depends(require_permission("users.delete")),
 ) -> dict:
     if current_user.id == user_id:
         return {
@@ -297,9 +274,7 @@ async def activate_user(
     request: Request,
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.activate")
-    ),
+    current_user: User = Depends(require_permission("users.activate")),
 ) -> dict:
     try:
         target_user = await UserService.get_user(
@@ -323,9 +298,7 @@ async def activate_user(
             module="users",
             entity_type="User",
             entity_id=activated_user.id,
-            description=(
-                f"Activated user {activated_user.email}"
-            ),
+            description=(f"Activated user {activated_user.email}"),
             old_values=old_values,
             new_values=new_values,
             ip_address=get_client_ip(request),
@@ -335,11 +308,9 @@ async def activate_user(
         await db.commit()
         await db.refresh(activated_user)
 
-        serialized_user = (
-            UserResponse.model_validate(
-                activated_user
-            ).model_dump(mode="json")
-        )
+        serialized_user = UserResponse.model_validate(
+            activated_user
+        ).model_dump(mode="json")
 
         return {
             "success": True,
@@ -357,16 +328,12 @@ async def deactivate_user(
     request: Request,
     user_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("users.deactivate")
-    ),
+    current_user: User = Depends(require_permission("users.deactivate")),
 ) -> dict:
     if current_user.id == user_id:
         return {
             "success": False,
-            "message": (
-                "You cannot deactivate your own account"
-            ),
+            "message": ("You cannot deactivate your own account"),
         }
 
     try:
@@ -377,11 +344,9 @@ async def deactivate_user(
 
         old_values = user_snapshot(target_user)
 
-        deactivated_user = (
-            await UserService.deactivate_user(
-                db=db,
-                user_id=user_id,
-            )
+        deactivated_user = await UserService.deactivate_user(
+            db=db,
+            user_id=user_id,
         )
 
         new_values = user_snapshot(deactivated_user)
@@ -393,10 +358,7 @@ async def deactivate_user(
             module="users",
             entity_type="User",
             entity_id=deactivated_user.id,
-            description=(
-                f"Deactivated user "
-                f"{deactivated_user.email}"
-            ),
+            description=(f"Deactivated user " f"{deactivated_user.email}"),
             old_values=old_values,
             new_values=new_values,
             ip_address=get_client_ip(request),
@@ -406,11 +368,9 @@ async def deactivate_user(
         await db.commit()
         await db.refresh(deactivated_user)
 
-        serialized_user = (
-            UserResponse.model_validate(
-                deactivated_user
-            ).model_dump(mode="json")
-        )
+        serialized_user = UserResponse.model_validate(
+            deactivated_user
+        ).model_dump(mode="json")
 
         return {
             "success": True,

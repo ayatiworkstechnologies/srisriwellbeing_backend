@@ -261,9 +261,7 @@ class PatientAddress(Base):
         onupdate=func.now(),
     )
 
-    patient: Mapped["Patient"] = relationship(
-        back_populates="addresses"
-    )
+    patient: Mapped["Patient"] = relationship(back_populates="addresses")
 
 
 class PatientIdentifier(Base):
@@ -308,9 +306,7 @@ class PatientIdentifier(Base):
         server_default=func.now(),
     )
 
-    patient: Mapped["Patient"] = relationship(
-        back_populates="identifiers"
-    )
+    patient: Mapped["Patient"] = relationship(back_populates="identifiers")
 
     __table_args__ = (
         UniqueConstraint(
@@ -388,9 +384,7 @@ class PatientDocument(Base):
         server_default=func.now(),
     )
 
-    patient: Mapped["Patient"] = relationship(
-        back_populates="documents"
-    )
+    patient: Mapped["Patient"] = relationship(back_populates="documents")
 
 
 class PatientDuplicateMatch(Base):
