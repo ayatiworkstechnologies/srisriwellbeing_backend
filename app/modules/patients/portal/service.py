@@ -212,6 +212,29 @@ class PatientPortalService:
         return document, file_path
 
     @staticmethod
+    async def get_public_document_file(
+        db: AsyncSession,
+        document_id: int,
+    ) -> tuple[
+        PatientDocument,
+        Path,
+    ]:
+        document = await PatientPortalRepository.get_document_by_id(
+            db=db,
+            document_id=document_id,
+        )
+
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+
+        file_path = get_safe_document_path(document.file_path)
+
+        return document, file_path
+
+    @staticmethod
     async def delete_document(
         db: AsyncSession,
         patient: Patient,

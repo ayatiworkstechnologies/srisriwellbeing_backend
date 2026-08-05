@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -39,11 +40,17 @@ class PatientRegisterRequest(BaseModel):
     full_name: str = Field(
         min_length=2,
         max_length=100,
+        validation_alias=AliasChoices("full_name", "fullName"),
     )
     email: EmailStr
     phone: str = Field(
         min_length=10,
         max_length=20,
+        validation_alias=AliasChoices(
+            "phone",
+            "mobile_number",
+            "mobileNumber",
+        ),
     )
     password: str = Field(
         min_length=8,
@@ -52,6 +59,10 @@ class PatientRegisterRequest(BaseModel):
     confirm_password: str = Field(
         min_length=8,
         max_length=128,
+        validation_alias=AliasChoices(
+            "confirm_password",
+            "confirmPassword",
+        ),
     )
 
     @field_validator("full_name")

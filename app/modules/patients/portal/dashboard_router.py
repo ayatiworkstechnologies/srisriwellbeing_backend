@@ -202,16 +202,14 @@ async def upload_patient_document(
     summary="Download Patient Document",
 )
 async def download_patient_document(
-    current_patient: CurrentPatient,
     document_id: int = Path(
         ...,
         gt=0,
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    document, file_path = await PatientPortalService.get_document_file(
+    document, file_path = await PatientPortalService.get_public_document_file(
         db=db,
-        patient=current_patient,
         document_id=document_id,
     )
 
@@ -219,6 +217,7 @@ async def download_patient_document(
         path=file_path,
         media_type=document.mime_type,
         filename=(document.original_file_name),
+        content_disposition_type="inline",
     )
 
 

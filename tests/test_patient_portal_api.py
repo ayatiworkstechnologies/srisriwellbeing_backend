@@ -65,6 +65,22 @@ def test_patient_register_request_normalizes_input() -> None:
     assert payload.phone == "+919876543210"
 
 
+def test_patient_register_accepts_frontend_camel_case_fields() -> None:
+    payload = PatientRegisterRequest.model_validate(
+        {
+            "fullName": "Test Patient",
+            "email": "patient@example.com",
+            "mobileNumber": "9876543210",
+            "password": "StrongPass1!",
+            "confirmPassword": "StrongPass1!",
+        }
+    )
+
+    assert payload.full_name == "Test Patient"
+    assert payload.phone == "9876543210"
+    assert payload.confirm_password == "StrongPass1!"
+
+
 def test_patient_register_requires_matching_passwords() -> None:
     with pytest.raises(ValidationError):
         PatientRegisterRequest(

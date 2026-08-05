@@ -88,6 +88,17 @@ class PatientPortalRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_document_by_id(
+        db: AsyncSession,
+        document_id: int,
+    ) -> PatientDocument | None:
+        result = await db.execute(
+            select(PatientDocument).where(PatientDocument.id == document_id)
+        )
+
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create_document(
         db: AsyncSession,
         *,

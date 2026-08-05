@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     APP_ENV: str = "development"
     DEBUG: bool = True
+    SQL_ECHO: bool = False
     API_V1_PREFIX: str = "/api/v1"
     LOG_LEVEL: str = "INFO"
 
