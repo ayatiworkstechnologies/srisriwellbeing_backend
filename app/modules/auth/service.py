@@ -1085,7 +1085,10 @@ class AuthService:
         reset_token = PasswordResetToken(
             user_id=user.id,
             token_hash=reset_token_hash,
-            expires_at=(datetime.now() + timedelta(minutes=30)),
+            expires_at=(
+                datetime.now()
+                + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
+            ),
             is_used=False,
         )
 
@@ -1107,19 +1110,15 @@ class AuthService:
             await db.rollback()
             raise
 
-        return {
-            "success": True,
-            "message": (
-                "If an account exists for this email, "
-                "password reset instructions have been generated."
-            ),
-            # Only for local development/testing.
-            # Remove this after email integration is completed.
-            "development_data": {
+        response = dict(generic_response)
+
+        if settings.APP_ENV.lower() == "development":
+            response["development_data"] = {
                 "reset_token": plain_reset_token,
-                "expires_in_minutes": 30,
-            },
-        }
+                "expires_in_minutes": settings.PASSWORD_RESET_EXPIRE_MINUTES,
+            }
+
+        return response
 
     # =========================================================
     # RESET PASSWORD

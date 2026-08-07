@@ -1,4 +1,3 @@
-# flake8: noqa: E402
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, engine
-from app.modules.rbac.model import Permission
+from app.modules.rbac.model import Permission, Role, RolePermission
 
 logger = logging.getLogger(__name__)
 
@@ -778,6 +777,86 @@ WEEK_4_PERMISSIONS: tuple[PermissionSeed, ...] = (
 )
 
 
+
+
+# Permissions assigned to the Patient role for the patient self-service portal.
+#
+# IMPORTANT:
+# These permissions must only be used together with patient-owned routes such as:
+#   /api/v1/patient/medical-history
+#   /api/v1/patient/clinical-records/conditions
+#
+# The backend route must derive the patient from the logged-in JWT. Do not use
+# these permissions to allow a patient to access another patient's record.
+PATIENT_ROLE_PERMISSION_CODES: tuple[str, ...] = (
+    # Week 1: own account/profile
+    "auth.login",
+    "auth.logout",
+    "auth.refresh_token",
+    "auth.change_password",
+    "auth.view_current_user",
+    "profile.view_own",
+    "profile.update_own",
+    "session.view_own",
+    "session.revoke_own",
+
+    # Week 3: own patient profile and documents
+    "patient.view",
+    "patient.update",
+    "patient_address.view",
+    "patient_address.create",
+    "patient_address.update",
+    "patient_document.view",
+    "patient_document.download",
+    "patient_document.upload",
+    "patient_document.update",
+
+    # Week 4: medical history
+    "medical_history.create",
+    "medical_history.view",
+    "medical_history.update",
+
+    # Week 4: conditions
+    "patient_condition.create",
+    "patient_condition.view",
+    "patient_condition.update",
+    "patient_condition.resolve",
+
+    # Week 4: surgeries
+    "patient_surgery.create",
+    "patient_surgery.view",
+    "patient_surgery.update",
+
+    # Week 4: existing medicines
+    "existing_medicine.create",
+    "existing_medicine.view",
+    "existing_medicine.update",
+    "existing_medicine.stop",
+
+    # Week 4: allergies
+    "allergy.create",
+    "allergy.view",
+    "allergy.update",
+    "allergy.deactivate",
+    "allergy.view_alert",
+
+    # Week 4: emergency contacts
+    "emergency_contact.create",
+    "emergency_contact.view",
+    "emergency_contact.update",
+    "emergency_contact.set_primary",
+
+    # Week 4: consent templates and patient consents
+    "consent_template.view",
+    "consent_template.list",
+    "patient_consent.create",
+    "patient_consent.view",
+    "patient_consent.capture",
+    "patient_consent.upload",
+    "patient_consent.download",
+    "patient_consent.revoke",
+)
+
 APPLICATION_PERMISSION_CODES = (
     "rbac.manage",
     "workflow.configure",
@@ -935,21 +1014,113 @@ async def seed_permissions(
         raise
 
 
+async def assign_permissions_to_patient_role(
+    db: AsyncSession,
+) -> dict[str, int]:
+    """
+    Assign patient self-service permissions to the Patient role.
+
+    This operation is idempotent:
+    - an existing role-permission mapping is not inserted again;
+    - only permission codes listed in PATIENT_ROLE_PERMISSION_CODES are assigned.
+    """
+    role_result = await db.execute(
+        select(Role).where(
+            Role.name.in_(("Patient", "patient", "PATIENT"))
+        )
+    )
+    patient_role = role_result.scalars().first()
+
+    if patient_role is None:
+        raise RuntimeError(
+            "Patient role was not found. Run the role seed first."
+        )
+
+    permission_result = await db.execute(
+        select(Permission).where(
+            Permission.code.in_(PATIENT_ROLE_PERMISSION_CODES)
+        )
+    )
+    permissions = permission_result.scalars().all()
+
+    permission_by_code = {
+        permission_row.code: permission_row
+        for permission_row in permissions
+    }
+
+    missing_codes = sorted(
+        set(PATIENT_ROLE_PERMISSION_CODES)
+        - set(permission_by_code)
+    )
+    if missing_codes:
+        raise RuntimeError(
+            "The following permissions were not created: "
+            f"{missing_codes}"
+        )
+
+    existing_result = await db.execute(
+        select(RolePermission.permission_id).where(
+            RolePermission.role_id == patient_role.id
+        )
+    )
+    existing_permission_ids = set(existing_result.scalars().all())
+
+    assigned = 0
+    existing = 0
+
+    for code in PATIENT_ROLE_PERMISSION_CODES:
+        permission_row = permission_by_code[code]
+
+        if permission_row.id in existing_permission_ids:
+            existing += 1
+            continue
+
+        db.add(
+            RolePermission(
+                role_id=patient_role.id,
+                permission_id=permission_row.id,
+            )
+        )
+        assigned += 1
+
+    await db.commit()
+
+    return {
+        "role_id": patient_role.id,
+        "assigned": assigned,
+        "existing": existing,
+        "total": len(PATIENT_ROLE_PERMISSION_CODES),
+    }
+
+
 async def main() -> None:
     async with AsyncSessionLocal() as db:
-        result = await seed_permissions(db)
+        permission_result = await seed_permissions(db)
+        role_result = await assign_permissions_to_patient_role(db)
+
     await engine.dispose()
 
     logger.info(
         "Permission seed completed: %s",
-        result,
+        permission_result,
+    )
+    logger.info(
+        "Patient role permission assignment completed: %s",
+        role_result,
     )
 
     print(
         "Permission seed completed | "
-        f"created={result['created']} | "
-        f"updated={result['updated']} | "
-        f"total={result['total']}"
+        f"created={permission_result['created']} | "
+        f"updated={permission_result['updated']} | "
+        f"total={permission_result['total']}"
+    )
+    print(
+        "Patient role permissions completed | "
+        f"role_id={role_result['role_id']} | "
+        f"assigned={role_result['assigned']} | "
+        f"existing={role_result['existing']} | "
+        f"total={role_result['total']}"
     )
 
 

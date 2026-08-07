@@ -1,7 +1,14 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 class PatientCreate(BaseModel):
@@ -89,14 +96,64 @@ class PatientListResponse(BaseModel):
 
 
 class PatientDuplicateCheckRequest(BaseModel):
-    mobile_number: str = Field(
-        ...,
+    first_name: Optional[str] = Field(default=None, max_length=100)
+    middle_name: Optional[str] = Field(default=None, max_length=100)
+    last_name: Optional[str] = Field(default=None, max_length=100)
+    mobile_number: Optional[str] = Field(
+        default=None,
         min_length=10,
         max_length=15,
     )
+    email: Optional[EmailStr] = None
+    date_of_birth: Optional[date] = None
+
+    @field_validator(
+        "first_name",
+        "middle_name",
+        "last_name",
+        "mobile_number",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_text(cls, value):
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def require_duplicate_identifier(self):
+        if not any(
+            (
+                self.mobile_number,
+                self.email,
+                self.date_of_birth,
+                self.first_name,
+            )
+        ):
+            raise ValueError(
+                "Provide a mobile number, email, date of birth, or first name"
+            )
+        return self
+
+
+class DuplicatePatientMatchResponse(BaseModel):
+    patient_id: int
+    patient_code: str
+    full_name: str
+    mobile_number: str
+    email: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    mobile_match: bool
+    email_match: bool
+    date_of_birth_match: bool
+    name_similarity_score: int
+    overall_match_score: int
 
 
 class PatientDuplicateCheckResponse(BaseModel):
+    has_possible_duplicates: bool
+    matches: list[DuplicatePatientMatchResponse]
     is_duplicate: bool
     patient_id: Optional[int] = None
     patient_code: Optional[str] = None

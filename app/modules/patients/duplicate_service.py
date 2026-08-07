@@ -15,7 +15,7 @@ from app.modules.patients.schemas import (
 
 
 def normalize_name(
-    first_name: str,
+    first_name: Optional[str],
     middle_name: Optional[str] = None,
     last_name: Optional[str] = None,
 ) -> str:
@@ -37,7 +37,9 @@ def normalize_name(
     normalized = "".join(
         character
         for character in normalized
-        if not unicodedata.combining(character)
+        if not unicodedata.combining(
+            character
+        )
     )
 
     normalized = normalized.lower()
@@ -69,18 +71,22 @@ async def find_possible_duplicates(
         payload.last_name,
     )
 
-    filters = [
-        Patient.mobile_number == payload.mobile_number,
-        Patient.normalized_full_name == normalized_name,
-    ]
+    filters = []
+
+    if payload.mobile_number:
+        filters.append(Patient.mobile_number == payload.mobile_number)
 
     if payload.email:
-        filters.append(Patient.email == payload.email.lower())
+        filters.append(Patient.email == str(payload.email).lower())
 
     if payload.date_of_birth:
         filters.append(Patient.date_of_birth == payload.date_of_birth)
 
-    statement = select(Patient).where(or_(*filters)).limit(25)
+    if normalized_name:
+        name_prefix = normalized_name.split()[0][:3]
+        filters.append(Patient.normalized_full_name.ilike(f"%{name_prefix}%"))
+
+    statement = select(Patient).where(or_(*filters)).limit(100)
 
     result = await db.execute(statement)
     candidate_patients = result.scalars().unique().all()
@@ -88,12 +94,15 @@ async def find_possible_duplicates(
     matches: list[DuplicatePatientMatchResponse] = []
 
     for patient in candidate_patients:
-        mobile_match = patient.mobile_number == payload.mobile_number
+        mobile_match = bool(
+            payload.mobile_number
+            and patient.mobile_number == payload.mobile_number
+        )
 
         email_match = bool(
             payload.email
             and patient.email
-            and patient.email.lower() == payload.email.lower()
+            and patient.email.lower() == str(payload.email).lower()
         )
 
         dob_match = bool(
@@ -102,11 +111,15 @@ async def find_possible_duplicates(
             and patient.date_of_birth == payload.date_of_birth
         )
 
-        name_score = int(
-            fuzz.token_sort_ratio(
-                normalized_name,
-                patient.normalized_full_name,
+        name_score = (
+            int(
+                fuzz.token_sort_ratio(
+                    normalized_name,
+                    patient.normalized_full_name,
+                )
             )
+            if normalized_name
+            else 0
         )
 
         overall_score = 0
@@ -146,7 +159,17 @@ async def find_possible_duplicates(
         reverse=True,
     )
 
+    first_match = matches[0] if matches else None
+
     return PatientDuplicateCheckResponse(
         has_possible_duplicates=bool(matches),
         matches=matches,
+        is_duplicate=bool(matches),
+        patient_id=first_match.patient_id if first_match else None,
+        patient_code=first_match.patient_code if first_match else None,
+        message=(
+            "Possible duplicate patients found"
+            if matches
+            else "No possible duplicate patients found"
+        ),
     )

@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 
 from fastapi import HTTPException, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit_logs.repository import (
@@ -9,6 +13,31 @@ from app.modules.audit_logs.repository import (
 
 
 class AuditLogService:
+    @staticmethod
+    def _make_json_safe(
+        value: Any,
+    ) -> Any:
+        """
+        Convert Python objects into values that can be safely
+        stored inside SQLAlchemy JSON columns.
+
+        Handles:
+        - date
+        - datetime
+        - UUID
+        - Enum
+        - Decimal
+        - Pydantic models
+        - dictionaries
+        - lists
+        - nested values
+        """
+
+        if value is None:
+            return None
+
+        return jsonable_encoder(value)
+
     @staticmethod
     async def record(
         db: AsyncSession,
@@ -19,21 +48,37 @@ class AuditLogService:
         entity_type: str | None = None,
         entity_id: int | str | None = None,
         description: str | None = None,
-        old_values: dict | None = None,
-        new_values: dict | None = None,
+        old_values: dict | list | None = None,
+        new_values: dict | list | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ):
+        safe_old_values = (
+            AuditLogService._make_json_safe(
+                old_values
+            )
+        )
+
+        safe_new_values = (
+            AuditLogService._make_json_safe(
+                new_values
+            )
+        )
+
         return await AuditLogRepository.create(
             db=db,
             user_id=user_id,
             action=action,
             module=module,
             entity_type=entity_type,
-            entity_id=(str(entity_id) if entity_id is not None else None),
+            entity_id=(
+                str(entity_id)
+                if entity_id is not None
+                else None
+            ),
             description=description,
-            old_values=old_values,
-            new_values=new_values,
+            old_values=safe_old_values,
+            new_values=safe_new_values,
             ip_address=ip_address,
             user_agent=user_agent,
         )
@@ -43,9 +88,11 @@ class AuditLogService:
         db: AsyncSession,
         audit_log_id: int,
     ):
-        audit_log = await AuditLogRepository.get_by_id(
-            db,
-            audit_log_id,
+        audit_log = (
+            await AuditLogRepository.get_by_id(
+                db,
+                audit_log_id,
+            )
         )
 
         if audit_log is None:

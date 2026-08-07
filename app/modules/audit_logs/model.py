@@ -1,7 +1,20 @@
+from __future__ import annotations
+
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, ForeignKey, Index, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from app.models.base import BaseModel
 
@@ -53,12 +66,16 @@ class AuditLog(BaseModel):
         nullable=True,
     )
 
-    old_values: Mapped[dict[str, Any] | None] = mapped_column(
+    old_values: Mapped[
+        dict[str, Any] | list[Any] | None
+    ] = mapped_column(
         JSON,
         nullable=True,
     )
 
-    new_values: Mapped[dict[str, Any] | None] = mapped_column(
+    new_values: Mapped[
+        dict[str, Any] | list[Any] | None
+    ] = mapped_column(
         JSON,
         nullable=True,
     )
@@ -91,3 +108,14 @@ class AuditLog(BaseModel):
             "entity_id",
         ),
     )
+
+    def __repr__(self) -> str:
+        return (
+            f"<AuditLog("
+            f"id={self.id}, "
+            f"action={self.action!r}, "
+            f"module={self.module!r}, "
+            f"entity_type={self.entity_type!r}, "
+            f"entity_id={self.entity_id!r}"
+            f")>"
+        )

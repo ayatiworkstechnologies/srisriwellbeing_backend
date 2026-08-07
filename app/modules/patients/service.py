@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.patients.constants import PatientStatus
+from app.modules.patients.duplicate_service import find_possible_duplicates
 from app.modules.patients.models import Patient
 from app.modules.patients.schemas import (
     PatientCreate,
@@ -433,28 +434,7 @@ class PatientService:
         db: AsyncSession,
         payload: PatientDuplicateCheckRequest,
     ) -> dict:
-        mobile_number = payload.mobile_number.strip()
-
-        result = await db.execute(
-            select(Patient).where(Patient.mobile_number == mobile_number)
-        )
-
-        patient = result.scalars().first()
-
-        if patient is None:
-            return {
-                "is_duplicate": False,
-                "patient_id": None,
-                "patient_code": None,
-                "message": ("No patient found with this " "mobile number"),
-            }
-
-        return {
-            "is_duplicate": True,
-            "patient_id": patient.id,
-            "patient_code": patient.patient_code,
-            "message": ("A patient with this mobile number " "already exists"),
-        }
+        return await find_possible_duplicates(db=db, payload=payload)
 
     # ------------------------------------------------------------------
     # 6. Delete patient

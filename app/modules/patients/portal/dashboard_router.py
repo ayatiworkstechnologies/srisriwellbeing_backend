@@ -12,11 +12,20 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.modules.patients.constants import (
-    DocumentType,
+from app.modules.clinical.schemas import (
+    AllergyCreate,
+    ConditionCreate,
+    EmergencyContactCreate,
+    MedicalHistoryUpsert,
+    MedicineCreate,
+    PatientConsentCreate,
+    SurgeryCreate,
 )
+from app.modules.clinical.service import ClinicalService
+from app.modules.patients.constants import DocumentType
 from app.modules.patients.portal.dependencies import (
     CurrentPatient,
+    
     CurrentPatientUser,
 )
 from app.modules.patients.portal.schemas import (
@@ -29,11 +38,35 @@ from app.modules.patients.portal.schemas import (
     PatientProfileResponse,
     PatientProfileUpdate,
 )
-from app.modules.patients.portal.service import (
-    PatientPortalService,
-)
+from app.modules.patients.portal.service import PatientPortalService
 
 router = APIRouter()
+PATIENT_CLINICAL_RESOURCES = (
+    "conditions",
+    "surgeries",
+    "medicines",
+    "allergies",
+    "emergency-contacts",
+    "consents",
+)
+CLINICAL_RESOURCE_PATTERN = f"^({'|'.join(PATIENT_CLINICAL_RESOURCES)})$"
+
+
+async def _create_patient_clinical_resource(
+    *,
+    db: AsyncSession,
+    patient,
+    user,
+    resource: str,
+    payload,
+):
+    return await ClinicalService.create_resource(
+        db=db,
+        patient_id=patient.id,
+        resource=resource,
+        data=payload.model_dump(),
+        user_id=user.id,
+    )
 
 
 def create_document_data(
@@ -125,6 +158,265 @@ async def update_patient_profile(
     )
 
 
+@router.put(
+    "/medical-history",
+    status_code=status.HTTP_200_OK,
+    summary="Update Own Medical History",
+)
+async def update_patient_medical_history(
+    payload: MedicalHistoryUpsert,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.upsert_history(
+        db=db,
+        patient_id=current_patient.id,
+        data=payload.model_dump(),
+        user_id=current_user.id,
+    )
+
+
+@router.get(
+    "/clinical-summary",
+    status_code=status.HTTP_200_OK,
+    summary="View Own Clinical Summary",
+)
+async def get_patient_clinical_summary(
+    current_patient: CurrentPatient,
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.clinical_summary(
+        db=db,
+        patient_id=current_patient.id,
+    )
+
+
+@router.get(
+    "/admission-readiness",
+    status_code=status.HTTP_200_OK,
+    summary="View Own Admission Readiness",
+)
+async def get_patient_admission_readiness(
+    current_patient: CurrentPatient,
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.validate_admission_readiness(
+        db=db,
+        patient_id=current_patient.id,
+    )
+
+
+@router.get(
+    "/consent-templates",
+    status_code=status.HTTP_200_OK,
+    summary="List Patient Consent Templates",
+)
+async def list_patient_consent_templates(
+    current_patient: CurrentPatient,
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.list_templates(db)
+
+
+@router.get(
+    "/clinical-records/{resource}",
+    status_code=status.HTTP_200_OK,
+    summary="View Own Clinical Records",
+)
+async def list_patient_clinical_resource(
+    current_patient: CurrentPatient,
+    resource: str = Path(pattern=CLINICAL_RESOURCE_PATTERN),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.list_resource(
+        db=db,
+        patient_id=current_patient.id,
+        resource=resource,
+    )
+
+
+@router.post(
+    "/clinical-records/conditions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Own Medical Condition",
+)
+async def create_patient_condition(
+    payload: ConditionCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="conditions",
+        payload=payload,
+    )
+
+
+@router.post(
+    "/clinical-records/surgeries",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Own Surgery",
+)
+async def create_patient_surgery(
+    payload: SurgeryCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="surgeries",
+        payload=payload,
+    )
+
+
+@router.post(
+    "/clinical-records/medicines",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Own Medicine",
+)
+async def create_patient_medicine(
+    payload: MedicineCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="medicines",
+        payload=payload,
+    )
+
+
+@router.post(
+    "/clinical-records/allergies",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Own Allergy",
+)
+async def create_patient_allergy(
+    payload: AllergyCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="allergies",
+        payload=payload,
+    )
+
+
+@router.post(
+    "/clinical-records/emergency-contacts",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Own Emergency Contact",
+)
+async def create_patient_emergency_contact(
+    payload: EmergencyContactCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="emergency-contacts",
+        payload=payload,
+    )
+
+
+@router.post(
+    "/clinical-records/consents",
+    status_code=status.HTTP_201_CREATED,
+    summary="Capture Own Consent",
+)
+async def create_patient_consent(
+    payload: PatientConsentCreate,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_patient_clinical_resource(
+        db=db,
+        patient=current_patient,
+        user=current_user,
+        resource="consents",
+        payload=payload,
+    )
+
+
+@router.patch(
+    "/clinical-records/{resource}/{item_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Update Own Clinical Record",
+)
+async def update_patient_clinical_resource(
+    payload: dict,
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    resource: str = Path(pattern=CLINICAL_RESOURCE_PATTERN),
+    item_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.update_resource(
+        db=db,
+        patient_id=current_patient.id,
+        resource=resource,
+        item_id=item_id,
+        data=payload,
+        user_id=current_user.id,
+    )
+
+
+@router.delete(
+    "/clinical-records/{resource}/{item_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Own Clinical Record",
+)
+async def delete_patient_clinical_resource(
+    current_patient: CurrentPatient,
+    current_user: CurrentPatientUser,
+    resource: str = Path(pattern=CLINICAL_RESOURCE_PATTERN),
+    item_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.delete_resource(
+        db=db,
+        patient_id=current_patient.id,
+        resource=resource,
+        item_id=item_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/consents/{consent_id}/revoke",
+    status_code=status.HTTP_200_OK,
+    summary="Revoke Own Consent",
+)
+async def revoke_patient_consent(
+    current_patient: CurrentPatient,
+    consent_id: int = Path(gt=0),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ClinicalService.revoke_consent(
+        db=db,
+        patient_id=current_patient.id,
+        consent_id=consent_id,
+    )
+
+
 @router.get(
     "/documents",
     response_model=PatientDocumentListResponse,
@@ -202,14 +494,16 @@ async def upload_patient_document(
     summary="Download Patient Document",
 )
 async def download_patient_document(
+    current_patient: CurrentPatient,
     document_id: int = Path(
         ...,
         gt=0,
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    document, file_path = await PatientPortalService.get_public_document_file(
+    document, file_path = await PatientPortalService.get_document_file(
         db=db,
+        patient=current_patient,
         document_id=document_id,
     )
 
