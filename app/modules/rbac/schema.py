@@ -1,6 +1,59 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
+
+
+# =========================================================
+# USER ROLE ASSIGNMENT
+# =========================================================
+
+
+class UserRoleAssignRequest(BaseModel):
+    role_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Role IDs to assign to the user"
+        ),
+    )
+
+    @field_validator("role_ids")
+    @classmethod
+    def validate_role_ids(
+        cls,
+        value: list[int],
+    ) -> list[int]:
+        cleaned_ids = list(
+            dict.fromkeys(value)
+        )
+
+        if any(
+            role_id <= 0
+            for role_id in cleaned_ids
+        ):
+            raise ValueError(
+                "Role IDs must be positive integers."
+            )
+
+        return cleaned_ids
+
+
+# Keep this because existing routes may already
+# import AssignRolesRequest.
+class AssignRolesRequest(
+    UserRoleAssignRequest
+):
+    pass
+
+
+# =========================================================
+# ROLE CREATE
+# =========================================================
 
 
 class RoleCreateRequest(BaseModel):
@@ -23,8 +76,47 @@ class RoleCreateRequest(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def normalize_name(cls, value: str) -> str:
-        return value.strip().upper().replace(" ", "_")
+    def normalize_name(
+        cls,
+        value: str,
+    ) -> str:
+        return (
+            value
+            .strip()
+            .lower()
+            .replace(" ", "_")
+            .replace("-", "_")
+        )
+
+    @field_validator(
+        "display_name"
+    )
+    @classmethod
+    def normalize_display_name(
+        cls,
+        value: str,
+    ) -> str:
+        return value.strip()
+
+    @field_validator(
+        "description"
+    )
+    @classmethod
+    def normalize_description(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+
+        return cleaned or None
+
+
+# =========================================================
+# ROLE UPDATE
+# =========================================================
 
 
 class RoleUpdateRequest(BaseModel):
@@ -41,9 +133,44 @@ class RoleUpdateRequest(BaseModel):
 
     is_active: bool | None = None
 
+    @field_validator(
+        "display_name"
+    )
+    @classmethod
+    def normalize_display_name(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        return value.strip()
+
+    @field_validator(
+        "description"
+    )
+    @classmethod
+    def normalize_description(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+
+        return cleaned or None
+
+
+# =========================================================
+# ROLE RESPONSE
+# =========================================================
+
 
 class RoleResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True
+    )
 
     id: int
     name: str
@@ -55,7 +182,38 @@ class RoleResponse(BaseModel):
     updated_at: datetime
 
 
-class PermissionCreateRequest(BaseModel):
+# =========================================================
+# USER ROLE RESPONSE
+# =========================================================
+
+
+class UserRoleItemResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    id: int
+    name: str
+    display_name: str
+    is_active: bool
+
+
+class UserRolesResponse(BaseModel):
+    user_id: int
+
+    roles: list[
+        UserRoleItemResponse
+    ]
+
+
+# =========================================================
+# PERMISSION CREATE
+# =========================================================
+
+
+class PermissionCreateRequest(
+    BaseModel
+):
     module: str = Field(
         min_length=2,
         max_length=100,
@@ -71,13 +229,47 @@ class PermissionCreateRequest(BaseModel):
         max_length=1000,
     )
 
-    @field_validator("module", "action")
+    @field_validator(
+        "module",
+        "action",
+    )
     @classmethod
-    def normalize_value(cls, value: str) -> str:
-        return value.strip().lower().replace(" ", "_")
+    def normalize_value(
+        cls,
+        value: str,
+    ) -> str:
+        return (
+            value
+            .strip()
+            .lower()
+            .replace(" ", "_")
+            .replace("-", "_")
+        )
+
+    @field_validator(
+        "description"
+    )
+    @classmethod
+    def normalize_description(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+
+        return cleaned or None
 
 
-class PermissionUpdateRequest(BaseModel):
+# =========================================================
+# PERMISSION UPDATE
+# =========================================================
+
+
+class PermissionUpdateRequest(
+    BaseModel
+):
     description: str | None = Field(
         default=None,
         max_length=1000,
@@ -85,9 +277,31 @@ class PermissionUpdateRequest(BaseModel):
 
     is_active: bool | None = None
 
+    @field_validator(
+        "description"
+    )
+    @classmethod
+    def normalize_description(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+
+        return cleaned or None
+
+
+# =========================================================
+# PERMISSION RESPONSE
+# =========================================================
+
 
 class PermissionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True
+    )
 
     id: int
     module: str
@@ -99,15 +313,40 @@ class PermissionResponse(BaseModel):
     updated_at: datetime
 
 
-class AssignPermissionsRequest(BaseModel):
+# =========================================================
+# ASSIGN PERMISSIONS TO ROLE
+# =========================================================
+
+
+class AssignPermissionsRequest(
+    BaseModel
+):
     permission_ids: list[int] = Field(
         default_factory=list,
-        description="Permission IDs to assign to the role",
+        description=(
+            "Permission IDs to assign to the role"
+        ),
     )
 
-
-class AssignRolesRequest(BaseModel):
-    role_ids: list[int] = Field(
-        default_factory=list,
-        description="Role IDs to assign to the user",
+    @field_validator(
+        "permission_ids"
     )
+    @classmethod
+    def validate_permission_ids(
+        cls,
+        value: list[int],
+    ) -> list[int]:
+        cleaned_ids = list(
+            dict.fromkeys(value)
+        )
+
+        if any(
+            permission_id <= 0
+            for permission_id
+            in cleaned_ids
+        ):
+            raise ValueError(
+                "Permission IDs must be positive integers."
+            )
+
+        return cleaned_ids

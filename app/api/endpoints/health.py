@@ -8,6 +8,7 @@ router = APIRouter()
 
 
 @router.get("/health")
+@router.get("/health/ready", include_in_schema=False)
 async def health_check(
     db: AsyncSession = Depends(get_db),
 ) -> dict:

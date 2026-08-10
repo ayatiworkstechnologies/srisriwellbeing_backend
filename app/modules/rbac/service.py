@@ -401,6 +401,12 @@ class RBACService:
 
         unique_role_ids = list(dict.fromkeys(role_ids))
 
+        if not unique_role_ids:
+           raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="At least one role is required",
+    )
+
         roles = await RBACRepository.get_roles_by_ids(
             db=db,
             role_ids=unique_role_ids,

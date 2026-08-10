@@ -10,7 +10,9 @@ from app.modules.rbac.service import RBACService
 def test_canonical_health_and_auth_routes_are_versioned() -> None:
     paths = {route.path for route in app.routes}
     assert "/health" in paths
+    assert "/health/ready" in paths
     assert "/api/v1/health" in paths
+    assert "/api/v1/health/ready" in paths
     assert "/api/v1/auth/login" in paths
     assert "/api/v1/auth/refresh" in paths
     assert "/api/v1/auth/logout" in paths
