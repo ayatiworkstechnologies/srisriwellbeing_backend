@@ -9,6 +9,8 @@ from app.core.config import settings
 
 
 class TokenService:
+    DOCUMENT_VIEW_TOKEN_EXPIRE_MINUTES = 5
+
     @staticmethod
     def create_access_token(
         user_id: int,
@@ -79,6 +81,31 @@ class TokenService:
 
         except JWTError as exc:
             raise ValueError("Token is invalid or expired") from exc
+
+    @staticmethod
+    def create_document_view_token(
+        document_id: int,
+        patient_id: int,
+    ) -> str:
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(
+            minutes=TokenService.DOCUMENT_VIEW_TOKEN_EXPIRE_MINUTES,
+        )
+
+        payload = {
+            "document_id": document_id,
+            "patient_id": patient_id,
+            "token_type": "document_view",
+            "jti": secrets.token_urlsafe(16),
+            "iat": int(now.timestamp()),
+            "exp": int(expires_at.timestamp()),
+        }
+
+        return jwt.encode(
+            payload,
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM,
+        )
 
     @staticmethod
     def hash_token(token: str) -> str:

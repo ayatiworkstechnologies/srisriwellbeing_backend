@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.main import app
+from app.modules.auth.token_service import TokenService
 from app.modules.clinical.schemas import AllergyCreate, MedicalHistoryUpsert
 from app.modules.clinical.service import ClinicalService
 from app.modules.patients.portal.dashboard_router import (
@@ -46,6 +47,7 @@ def test_patient_frontend_api_routes_are_registered() -> None:
         ("POST", "/api/patient/documents"),
         ("DELETE", "/api/patient/documents/{document_id}"),
         ("GET", "/api/patient/documents/{document_id}/download"),
+        ("GET", "/api/patient/documents/{document_id}/view"),
     }
 
     assert expected_routes <= routes
@@ -78,6 +80,7 @@ def test_patient_routes_have_non_api_compatibility_aliases() -> None:
         ("POST", "/patient/documents"),
         ("DELETE", "/patient/documents/{document_id}"),
         ("GET", "/patient/documents/{document_id}/download"),
+        ("GET", "/patient/documents/{document_id}/view"),
     }
     assert expected_aliases <= routes
 
@@ -292,3 +295,16 @@ def test_patient_register_requires_matching_passwords() -> None:
             password="StrongPass1!",
             confirm_password="DifferentPass1!",
         )
+
+
+def test_document_view_token_identifies_document_and_patient() -> None:
+    token = TokenService.create_document_view_token(
+        document_id=19,
+        patient_id=42,
+    )
+
+    payload = TokenService.decode_token(token)
+
+    assert payload["token_type"] == "document_view"
+    assert payload["document_id"] == 19
+    assert payload["patient_id"] == 42

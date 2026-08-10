@@ -7,6 +7,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.auth.token_service import TokenService
 from app.modules.patients.models import (
     Patient,
     PatientDocument,
@@ -212,13 +213,32 @@ class PatientPortalService:
         return document, file_path
 
     @staticmethod
-    async def get_public_document_file(
+    async def get_document_file_from_view_token(
         db: AsyncSession,
         document_id: int,
+        token: str,
     ) -> tuple[
         PatientDocument,
         Path,
     ]:
+        invalid_token = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired document view link",
+        )
+
+        try:
+            payload = TokenService.decode_token(token)
+            token_document_id = int(payload.get("document_id"))
+            token_patient_id = int(payload.get("patient_id"))
+        except (TypeError, ValueError):
+            raise invalid_token
+
+        if (
+            payload.get("token_type") != "document_view"
+            or token_document_id != document_id
+        ):
+            raise invalid_token
+
         document = await PatientPortalRepository.get_document_by_id(
             db=db,
             document_id=document_id,
@@ -229,6 +249,9 @@ class PatientPortalService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Document not found",
             )
+
+        if document.patient_id != token_patient_id:
+            raise invalid_token
 
         file_path = get_safe_document_path(document.file_path)
 
