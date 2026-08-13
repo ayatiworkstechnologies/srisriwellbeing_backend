@@ -214,6 +214,12 @@ class UserRolesResponse(BaseModel):
 class PermissionCreateRequest(
     BaseModel
 ):
+    name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=150,
+    )
+
     module: str = Field(
         min_length=2,
         max_length=100,
@@ -261,6 +267,16 @@ class PermissionCreateRequest(
 
         return cleaned or None
 
+    @field_validator("name")
+    @classmethod
+    def normalize_permission_name(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
 
 # =========================================================
 # PERMISSION UPDATE
@@ -270,6 +286,12 @@ class PermissionCreateRequest(
 class PermissionUpdateRequest(
     BaseModel
 ):
+    name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=150,
+    )
+
     description: str | None = Field(
         default=None,
         max_length=1000,
@@ -292,6 +314,16 @@ class PermissionUpdateRequest(
 
         return cleaned or None
 
+    @field_validator("name")
+    @classmethod
+    def normalize_permission_name(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
 
 # =========================================================
 # PERMISSION RESPONSE
@@ -304,6 +336,7 @@ class PermissionResponse(BaseModel):
     )
 
     id: int
+    name: str
     module: str
     action: str
     code: str

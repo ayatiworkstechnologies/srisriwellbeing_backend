@@ -1,3 +1,5 @@
+"""Repair RBAC assignments for an existing administrator account."""
+
 from __future__ import annotations
 
 import argparse
@@ -78,7 +80,8 @@ async def get_admin_user(db: AsyncSession, email: str) -> User:
     user = result.scalar_one_or_none()
     if user is None:
         raise RuntimeError(
-            f"Admin user '{email}' does not exist. Run your admin user seed first."
+            f"Admin user '{email}' does not exist. "
+            "Create the administrator account first."
         )
     return user
 

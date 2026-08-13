@@ -19,10 +19,21 @@ patient registration, and clinical-record services for the therapy centre.
    docker compose up --build
    ```
 
-4. Seed the six default roles and permissions:
+4. Seed all seven default roles, permissions, and role mappings:
 
    ```powershell
-   .\venv\Scripts\python.exe -m app.seeds
+   .\venv\Scripts\python.exe -m seeds
+   ```
+
+   The command is idempotent and can be run again after deployments. It
+   creates or updates seed records and synchronizes mappings only for the
+   default roles; custom roles are not changed.
+
+   To repair role assignments for an existing administrator separately:
+
+   ```powershell
+   .\venv\Scripts\python.exe -m seeds.maintenance.repair_admin_rbac `
+       --email admin@example.com
    ```
 
 The canonical API is `/api/v1`. Swagger is at `/docs`, ReDoc at `/redoc`,

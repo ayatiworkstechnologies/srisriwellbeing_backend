@@ -78,6 +78,7 @@ class RBACService:
                 "permissions": [
                     {
                         "id": permission.id,
+                        "name": permission.name,
                         "module": permission.module,
                         "action": permission.action,
                         "code": permission.code,
@@ -103,6 +104,7 @@ class RBACService:
             "data": [
                 {
                     "id": permission.id,
+                    "name": permission.name,
                     "module": permission.module,
                     "action": permission.action,
                     "code": permission.code,
@@ -136,6 +138,7 @@ class RBACService:
             "message": "Permission retrieved successfully",
             "data": {
                 "id": permission.id,
+                "name": permission.name,
                 "module": permission.module,
                 "action": permission.action,
                 "code": permission.code,
@@ -228,6 +231,10 @@ class RBACService:
             )
 
         permission = Permission(
+            name=(
+                payload.name
+                or action.replace("_", " ").title()
+            ),
             module=module,
             action=action,
             code=permission_code,
@@ -262,6 +269,7 @@ class RBACService:
             "message": "Permission created successfully",
             "data": {
                 "id": created_permission.id,
+                "name": created_permission.name,
                 "module": created_permission.module,
                 "action": created_permission.action,
                 "code": created_permission.code,
@@ -371,6 +379,7 @@ class RBACService:
                 "permissions": [
                     {
                         "id": permission.id,
+                        "name": permission.name,
                         "module": permission.module,
                         "action": permission.action,
                         "code": permission.code,
@@ -402,10 +411,10 @@ class RBACService:
         unique_role_ids = list(dict.fromkeys(role_ids))
 
         if not unique_role_ids:
-           raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail="At least one role is required",
-    )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="At least one role is required",
+            )
 
         roles = await RBACRepository.get_roles_by_ids(
             db=db,
@@ -639,6 +648,7 @@ class RBACService:
             "message": "Permission updated successfully",
             "data": {
                 "id": permission.id,
+                "name": permission.name,
                 "code": permission.code,
                 "description": permission.description,
                 "is_active": permission.is_active,

@@ -2,21 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from dataclasses import dataclass
-from pathlib import Path
-
-# Make direct execution resolve the repository's app package.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, engine
-from app.modules.rbac.model import Permission, Role, RolePermission
+from app.modules.rbac.model import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +36,6 @@ def permission(
 
 
 WEEK_1_PERMISSIONS: tuple[PermissionSeed, ...] = (
-    
     permission(
         "auth.login",
         "Login",
@@ -777,12 +768,108 @@ WEEK_4_PERMISSIONS: tuple[PermissionSeed, ...] = (
 )
 
 
+# =========================================================
+# WEEK 5 - APPOINTMENT MANAGEMENT
+# =========================================================
+
+WEEK_5_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "appointments.view",
+        "View Appointments",
+        "appointments",
+        "View and list appointments.",
+    ),
+    permission(
+        "appointments.create",
+        "Create Appointments",
+        "appointments",
+        "Create walk-in, online and follow-up appointments.",
+    ),
+    permission(
+        "appointments.update",
+        "Update Appointments",
+        "appointments",
+        "Update appointment details.",
+    ),
+    permission(
+        "appointments.confirm",
+        "Confirm Appointments",
+        "appointments",
+        "Confirm a pending appointment.",
+    ),
+    permission(
+        "appointments.checkin",
+        "Check In Patient",
+        "appointments",
+        "Check a patient in for an appointment.",
+    ),
+    permission(
+        "appointments.consult",
+        "Start Consultation",
+        "appointments",
+        "Start consultation for a checked-in appointment.",
+    ),
+    permission(
+        "appointments.complete",
+        "Complete Appointment",
+        "appointments",
+        "Mark an appointment consultation as completed.",
+    ),
+    permission(
+        "appointments.reschedule",
+        "Reschedule Appointment",
+        "appointments",
+        "Reschedule an existing appointment.",
+    ),
+    permission(
+        "appointments.no_show",
+        "Mark Appointment No Show",
+        "appointments",
+        "Mark a confirmed appointment as no-show.",
+    ),
+    permission(
+        "appointment_slots.view",
+        "View Appointment Slots",
+        "appointment_slots",
+        "View doctor appointment slots and available slots.",
+    ),
+    permission(
+        "appointment_slots.manage",
+        "Manage Appointment Slots",
+        "appointment_slots",
+        "Create, block and unblock appointment slots.",
+    ),
+    permission(
+        "doctor_availability.view",
+        "View Doctor Availability",
+        "doctor_availability",
+        "View doctor schedules and availability.",
+    ),
+    permission(
+        "doctor_availability.manage",
+        "Manage Doctor Availability",
+        "doctor_availability",
+        "Create, update and disable doctor availability.",
+    ),
+    permission(
+        "appointment_waiting_list.view",
+        "View Appointment Waiting List",
+        "appointment_waiting_list",
+        "View patients waiting for appointment slots.",
+    ),
+    permission(
+        "appointment_waiting_list.manage",
+        "Manage Appointment Waiting List",
+        "appointment_waiting_list",
+        "Add and update appointment waiting-list entries.",
+    ),
+)
 
 
 # Permissions assigned to the Patient role for the patient self-service portal.
 #
 # IMPORTANT:
-# These permissions must only be used together with patient-owned routes such as:
+# Use these permissions only with patient-owned routes, such as:
 #   /api/v1/patient/medical-history
 #   /api/v1/patient/clinical-records/conditions
 #
@@ -855,6 +942,15 @@ PATIENT_ROLE_PERMISSION_CODES: tuple[str, ...] = (
     "patient_consent.upload",
     "patient_consent.download",
     "patient_consent.revoke",
+
+    # Week 5: own appointment booking and availability
+    # IMPORTANT: patient-facing routes must still scope data
+    # to the authenticated patient's own records.
+    "appointments.view",
+    "appointments.create",
+    "appointment_slots.view",
+    "doctor_availability.view",
+
 )
 
 APPLICATION_PERMISSION_CODES = (
@@ -893,6 +989,7 @@ ALL_PERMISSIONS: tuple[PermissionSeed, ...] = (
     *WEEK_2_PERMISSIONS,
     *WEEK_3_PERMISSIONS,
     *WEEK_4_PERMISSIONS,
+    *WEEK_5_PERMISSIONS,
     *APPLICATION_PERMISSIONS,
 )
 
@@ -931,7 +1028,7 @@ def _permission_values(
         "code": seed.code,
         "name": seed.name,
         "module": seed.module,
-        "action": seed.code.split(".", 1)[1],
+        "action": seed.code.split(".", 1)[1] if "." in seed.code else seed.code,
         "description": seed.description,
         "is_active": True,
         "is_system": True,
@@ -952,7 +1049,7 @@ def _update_permission(
     values = {
         "name": seed.name,
         "module": seed.module,
-        "action": seed.code.split(".", 1)[1],
+        "action": seed.code.split(".", 1)[1] if "." in seed.code else seed.code,
         "description": seed.description,
         "is_active": True,
         "is_system": True,
@@ -972,7 +1069,7 @@ async def seed_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Create or update all Week 1-4 permissions.
+    Create or update all Week 1-5 permissions.
 
     This function is idempotent:
     - existing permissions are matched using Permission.code;
@@ -1014,89 +1111,9 @@ async def seed_permissions(
         raise
 
 
-async def assign_permissions_to_patient_role(
-    db: AsyncSession,
-) -> dict[str, int]:
-    """
-    Assign patient self-service permissions to the Patient role.
-
-    This operation is idempotent:
-    - an existing role-permission mapping is not inserted again;
-    - only permission codes listed in PATIENT_ROLE_PERMISSION_CODES are assigned.
-    """
-    role_result = await db.execute(
-        select(Role).where(
-            Role.name.in_(("Patient", "patient", "PATIENT"))
-        )
-    )
-    patient_role = role_result.scalars().first()
-
-    if patient_role is None:
-        raise RuntimeError(
-            "Patient role was not found. Run the role seed first."
-        )
-
-    permission_result = await db.execute(
-        select(Permission).where(
-            Permission.code.in_(PATIENT_ROLE_PERMISSION_CODES)
-        )
-    )
-    permissions = permission_result.scalars().all()
-
-    permission_by_code = {
-        permission_row.code: permission_row
-        for permission_row in permissions
-    }
-
-    missing_codes = sorted(
-        set(PATIENT_ROLE_PERMISSION_CODES)
-        - set(permission_by_code)
-    )
-    if missing_codes:
-        raise RuntimeError(
-            "The following permissions were not created: "
-            f"{missing_codes}"
-        )
-
-    existing_result = await db.execute(
-        select(RolePermission.permission_id).where(
-            RolePermission.role_id == patient_role.id
-        )
-    )
-    existing_permission_ids = set(existing_result.scalars().all())
-
-    assigned = 0
-    existing = 0
-
-    for code in PATIENT_ROLE_PERMISSION_CODES:
-        permission_row = permission_by_code[code]
-
-        if permission_row.id in existing_permission_ids:
-            existing += 1
-            continue
-
-        db.add(
-            RolePermission(
-                role_id=patient_role.id,
-                permission_id=permission_row.id,
-            )
-        )
-        assigned += 1
-
-    await db.commit()
-
-    return {
-        "role_id": patient_role.id,
-        "assigned": assigned,
-        "existing": existing,
-        "total": len(PATIENT_ROLE_PERMISSION_CODES),
-    }
-
-
 async def main() -> None:
     async with AsyncSessionLocal() as db:
         permission_result = await seed_permissions(db)
-        role_result = await assign_permissions_to_patient_role(db)
 
     await engine.dispose()
 
@@ -1104,23 +1121,11 @@ async def main() -> None:
         "Permission seed completed: %s",
         permission_result,
     )
-    logger.info(
-        "Patient role permission assignment completed: %s",
-        role_result,
-    )
-
     print(
         "Permission seed completed | "
         f"created={permission_result['created']} | "
         f"updated={permission_result['updated']} | "
         f"total={permission_result['total']}"
-    )
-    print(
-        "Patient role permissions completed | "
-        f"role_id={role_result['role_id']} | "
-        f"assigned={role_result['assigned']} | "
-        f"existing={role_result['existing']} | "
-        f"total={role_result['total']}"
     )
 
 

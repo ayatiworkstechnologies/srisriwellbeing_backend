@@ -1,13 +1,5 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 import asyncio
 import logging
 from typing import Any
@@ -21,13 +13,14 @@ from app.modules.rbac.model import (
     Role,
     RolePermission,
 )
+from seeds.permissions_seed import PATIENT_ROLE_PERMISSION_CODES
 
 
 logger = logging.getLogger(__name__)
 
 
-# When True, existing mappings for the six default roles are deleted
-# and recreated exactly from ROLE_PERMISSION_CODES.
+# When True, stale mappings for the default roles are removed and missing
+# mappings from ROLE_PERMISSION_CODES are created.
 #
 # Custom roles are never changed.
 SYNC_EXACT = True
@@ -136,6 +129,69 @@ ADMIN_WEEK_4_PERMISSIONS = {
     "patient_consent.view",
     "patient_consent.download",
     "patient_consent.verify",
+}
+
+
+# =========================================================
+# WEEK 5 - APPOINTMENT MANAGEMENT
+# =========================================================
+
+ADMIN_WEEK_5_PERMISSIONS = {
+    "appointments.view",
+    "appointments.create",
+    "appointments.update",
+    "appointments.confirm",
+    "appointments.checkin",
+    "appointments.consult",
+    "appointments.complete",
+    "appointments.reschedule",
+    "appointments.no_show",
+    "appointment_slots.view",
+    "appointment_slots.manage",
+    "doctor_availability.view",
+    "doctor_availability.manage",
+    "appointment_waiting_list.view",
+    "appointment_waiting_list.manage",
+}
+
+RECEPTIONIST_WEEK_5_PERMISSIONS = {
+    "appointments.view",
+    "appointments.create",
+    "appointments.update",
+    "appointments.confirm",
+    "appointments.checkin",
+    "appointments.reschedule",
+    "appointments.no_show",
+    "appointment_slots.view",
+    "appointment_slots.manage",
+    "doctor_availability.view",
+    "appointment_waiting_list.view",
+    "appointment_waiting_list.manage",
+}
+
+DUTY_DOCTOR_WEEK_5_PERMISSIONS = {
+    "appointments.view",
+    "appointments.create",
+    "appointments.consult",
+    "appointments.complete",
+    "appointments.reschedule",
+    "appointment_slots.view",
+    "doctor_availability.view",
+    "doctor_availability.manage",
+}
+
+SPECIALIST_DOCTOR_WEEK_5_PERMISSIONS = {
+    *DUTY_DOCTOR_WEEK_5_PERMISSIONS,
+}
+
+THERAPIST_WEEK_5_PERMISSIONS = {
+    "appointments.view",
+    "appointment_slots.view",
+    "doctor_availability.view",
+}
+
+PHARMACIST_WEEK_5_PERMISSIONS = {
+    "appointments.view",
 }
 
 
@@ -306,12 +362,29 @@ ROLE_PERMISSION_CODES: dict[str, set[str]] = {
         *ADMIN_MANAGEMENT_PERMISSIONS,
         *ADMIN_PATIENT_PERMISSIONS,
         *ADMIN_WEEK_4_PERMISSIONS,
+        *ADMIN_WEEK_5_PERMISSIONS,
     },
-    "receptionist": RECEPTIONIST_PERMISSIONS,
-    "duty_doctor": DUTY_DOCTOR_PERMISSIONS,
-    "specialist_doctor": SPECIALIST_DOCTOR_PERMISSIONS,
-    "therapist": THERAPIST_PERMISSIONS,
-    "pharmacist": PHARMACIST_PERMISSIONS,
+    "receptionist": {
+        *RECEPTIONIST_PERMISSIONS,
+        *RECEPTIONIST_WEEK_5_PERMISSIONS,
+    },
+    "duty_doctor": {
+        *DUTY_DOCTOR_PERMISSIONS,
+        *DUTY_DOCTOR_WEEK_5_PERMISSIONS,
+    },
+    "specialist_doctor": {
+        *SPECIALIST_DOCTOR_PERMISSIONS,
+        *SPECIALIST_DOCTOR_WEEK_5_PERMISSIONS,
+    },
+    "therapist": {
+        *THERAPIST_PERMISSIONS,
+        *THERAPIST_WEEK_5_PERMISSIONS,
+    },
+    "pharmacist": {
+        *PHARMACIST_PERMISSIONS,
+        *PHARMACIST_WEEK_5_PERMISSIONS,
+    },
+    "patient": set(PATIENT_ROLE_PERMISSION_CODES),
 }
 
 
@@ -408,6 +481,7 @@ def validate_configuration() -> None:
         "specialist_doctor",
         "therapist",
         "pharmacist",
+        "patient",
     }
 
     if configured_roles != required_roles:
@@ -515,22 +589,57 @@ async def load_permissions(
     return permissions_by_code
 
 
-async def remove_existing_default_role_mappings(
+async def synchronize_existing_default_role_mappings(
     db: AsyncSession,
     roles_by_name: dict[str, Role],
-) -> int:
+) -> tuple[int, set[tuple[Any, Any]]]:
     role_ids = [
         role.id
         for role in roles_by_name.values()
     ]
 
+    desired_keys = {
+        (
+            roles_by_name[role_name].id,
+            permission_code,
+        )
+        for role_name, permission_codes in ROLE_PERMISSION_CODES.items()
+        for permission_code in permission_codes
+    }
+
     result = await db.execute(
-        delete(RolePermission).where(
+        select(
+            RolePermission.id,
+            RolePermission.role_id,
+            Permission.code,
+        )
+        .join(
+            Permission,
+            Permission.id == RolePermission.permission_id,
+        )
+        .where(
             RolePermission.role_id.in_(role_ids)
         )
     )
 
-    return int(result.rowcount or 0)
+    stale_ids: list[int] = []
+    existing_keys: set[tuple[Any, Any]] = set()
+
+    for mapping_id, role_id, permission_code in result.all():
+        key = (role_id, permission_code)
+        if key in desired_keys:
+            existing_keys.add(key)
+        else:
+            stale_ids.append(mapping_id)
+
+    if stale_ids:
+        await db.execute(
+            delete(RolePermission).where(
+                RolePermission.id.in_(stale_ids)
+            )
+        )
+
+    return len(stale_ids), existing_keys
 
 
 async def existing_mapping_keys(
@@ -561,7 +670,7 @@ async def seed_role_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Assign all Week 1-4 permissions to the six default roles.
+    Synchronize Week 1-5 permissions for all default application roles.
 
     Execution order:
     1. Run Alembic migrations.
@@ -578,13 +687,19 @@ async def seed_role_permissions(
         deleted = 0
 
         if SYNC_EXACT:
-            deleted = (
-                await remove_existing_default_role_mappings(
-                    db,
-                    roles_by_name,
+            deleted, existing_code_keys = (
+                await synchronize_existing_default_role_mappings(
+                    db=db,
+                    roles_by_name=roles_by_name,
                 )
             )
-            existing_keys: set[tuple[Any, Any]] = set()
+            existing_keys = {
+                (
+                    role_id,
+                    permissions_by_code[permission_code].id,
+                )
+                for role_id, permission_code in existing_code_keys
+            }
         else:
             existing_keys = await existing_mapping_keys(
                 db,

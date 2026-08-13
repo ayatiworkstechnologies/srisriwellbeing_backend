@@ -84,6 +84,11 @@ class Permission(Base):
         autoincrement=True,
     )
 
+    name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+    )
+
     module: Mapped[str] = mapped_column(
         String(100),
         nullable=False,

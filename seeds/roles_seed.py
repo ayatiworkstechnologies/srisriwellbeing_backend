@@ -1,17 +1,8 @@
-# flake8: noqa: E402
 from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from dataclasses import dataclass
-from pathlib import Path
-
-# Direct execution adds only the seeds directory to sys.path. Add the
-# repository root so imports such as app.core.database resolve correctly.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +70,14 @@ DEFAULT_ROLES: tuple[RoleSeed, ...] = (
             "and medicine dispensing."
         ),
     ),
+    RoleSeed(
+        code="patient",
+        name="Patient",
+        description=(
+            "Uses the patient portal to manage their own profile, "
+            "documents, clinical records and consents."
+        ),
+    ),
 )
 
 
@@ -136,7 +135,7 @@ async def seed_roles(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Create or update the six default roles.
+    Create or update all default application roles.
 
     This function is idempotent:
     - existing roles are found using Role.name;
