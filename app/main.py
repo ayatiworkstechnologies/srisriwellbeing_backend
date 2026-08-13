@@ -22,10 +22,8 @@ from app.modules.patients.portal.auth_router import (
 from app.modules.patients.portal.dashboard_router import (
     router as patient_dashboard_router,
 )
-
-from app.modules.appointments.router import (
-    appointments_router,
-    doctor_availability_router,
+from app.modules.patients.portal.appointments_router import (
+    router as patient_appointments_router,
 )
 
 
@@ -168,21 +166,6 @@ app.include_router(
 
 
 # =========================================================
-# APPOINTMENT MANAGEMENT
-# =========================================================
-
-app.include_router(
-    appointments_router,
-    prefix=settings.API_V1_PREFIX,
-)
-
-app.include_router(
-    doctor_availability_router,
-    prefix=settings.API_V1_PREFIX,
-)
-
-
-# =========================================================
 # COMPATIBILITY / LEGACY API
 # =========================================================
 
@@ -210,6 +193,12 @@ app.include_router(
 
 app.include_router(
     patient_dashboard_router,
+    prefix="/patient",
+    include_in_schema=False,
+)
+
+app.include_router(
+    patient_appointments_router,
     prefix="/patient",
     include_in_schema=False,
 )

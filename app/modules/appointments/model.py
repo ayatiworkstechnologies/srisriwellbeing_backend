@@ -33,7 +33,7 @@ class DoctorAvailability(BaseModel):
     )
 
     doctor_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="CASCADE",
@@ -111,7 +111,7 @@ class AppointmentSlot(BaseModel):
     )
 
     doctor_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="CASCADE",
@@ -207,7 +207,7 @@ class Appointment(BaseModel):
     )
 
     patient_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "patients.id",
             ondelete="RESTRICT",
@@ -217,7 +217,7 @@ class Appointment(BaseModel):
     )
 
     doctor_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="RESTRICT",
@@ -297,7 +297,7 @@ class Appointment(BaseModel):
     )
 
     created_by: Mapped[int | None] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="SET NULL",
@@ -411,7 +411,7 @@ class AppointmentStatusHistory(BaseModel):
     )
 
     changed_by: Mapped[int | None] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="SET NULL",
@@ -454,7 +454,7 @@ class AppointmentWaitingList(BaseModel):
     )
 
     patient_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "patients.id",
             ondelete="CASCADE",
@@ -464,7 +464,7 @@ class AppointmentWaitingList(BaseModel):
     )
 
     doctor_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey(
             "users.id",
             ondelete="CASCADE",

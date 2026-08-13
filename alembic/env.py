@@ -31,8 +31,9 @@ from app.models.base import Base  # noqa: E402
 # Import all existing models so Alembic can discover them.
 import app.models.model_registry  # noqa: F401, E402
 
-# Week 5 appointment models.
+# Appointment and patient-booking models live outside model_registry.
 import app.modules.appointments.model  # noqa: F401, E402
+import app.modules.patient_bookings.model  # noqa: F401, E402
 
 
 # =========================================================
@@ -76,7 +77,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=False,
         dialect_opts={
             "paramstyle": "named",
         },
@@ -100,7 +101,7 @@ def do_run_migrations(connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=False,
     )
 
     with context.begin_transaction():

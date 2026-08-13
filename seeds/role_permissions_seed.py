@@ -133,10 +133,29 @@ ADMIN_WEEK_4_PERMISSIONS = {
 
 
 # =========================================================
+# PATIENT BOOKING PERMISSIONS
+# Assigned to:
+# - admin
+# - receptionist
+# - duty_doctor
+# - specialist_doctor
+# =========================================================
+
+PATIENT_BOOKING_PERMISSIONS = {
+    "patient_booking.create",
+    "patient_booking.list",
+    "patient_booking.view",
+    "patient_booking.reschedule",
+    "patient_booking.cancel",
+}
+
+
+# =========================================================
 # WEEK 5 - APPOINTMENT MANAGEMENT
 # =========================================================
 
 ADMIN_WEEK_5_PERMISSIONS = {
+    *PATIENT_BOOKING_PERMISSIONS,
     "appointments.view",
     "appointments.create",
     "appointments.update",
@@ -155,6 +174,7 @@ ADMIN_WEEK_5_PERMISSIONS = {
 }
 
 RECEPTIONIST_WEEK_5_PERMISSIONS = {
+    *PATIENT_BOOKING_PERMISSIONS,
     "appointments.view",
     "appointments.create",
     "appointments.update",
@@ -170,6 +190,7 @@ RECEPTIONIST_WEEK_5_PERMISSIONS = {
 }
 
 DUTY_DOCTOR_WEEK_5_PERMISSIONS = {
+    *PATIENT_BOOKING_PERMISSIONS,
     "appointments.view",
     "appointments.create",
     "appointments.consult",

@@ -8,6 +8,8 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.token_service import TokenService
+from app.modules.appointments.repository import AppointmentRepository
+from app.modules.appointments.utils import today_local
 from app.modules.patients.models import (
     Patient,
     PatientDocument,
@@ -40,6 +42,14 @@ class PatientPortalService:
             patient_id=patient.id,
         )
 
+        upcoming_appointments = (
+            await AppointmentRepository.count_upcoming_patient_appointments(
+                db=db,
+                patient_id=patient.id,
+                from_date=today_local(),
+            )
+        )
+
         full_name = " ".join(
             value
             for value in [
@@ -70,7 +80,7 @@ class PatientPortalService:
             ),
             summary=(
                 PatientDashboardSummary(
-                    upcoming_appointments=0,
+                    upcoming_appointments=upcoming_appointments,
                     active_prescriptions=0,
                     new_reports=document_count,
                     pending_payments=0,

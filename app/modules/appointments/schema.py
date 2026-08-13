@@ -149,6 +149,25 @@ class AppointmentCreateRequest(BaseModel):
     )
 
 
+class PatientAppointmentCreateRequest(BaseModel):
+    """Input accepted when a logged-in patient books online."""
+
+    # The slot is the source of truth for the doctor. doctor_id remains
+    # optional for compatibility with clients that already submit it.
+    doctor_id: int | None = Field(default=None, gt=0)
+    slot_id: int = Field(gt=0)
+
+    reason: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+    notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
 # =========================================================
 # UPDATE APPOINTMENT
 # =========================================================

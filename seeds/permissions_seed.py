@@ -769,10 +769,49 @@ WEEK_4_PERMISSIONS: tuple[PermissionSeed, ...] = (
 
 
 # =========================================================
+# PATIENT BOOKING PERMISSIONS
+# =========================================================
+
+PATIENT_BOOKING_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "patient_booking.create",
+        "Create Patient Booking",
+        "patient_booking",
+        "Create a patient booking for the authenticated patient or by authorized staff.",
+    ),
+    permission(
+        "patient_booking.view",
+        "View Patient Booking",
+        "patient_booking",
+        "View a patient booking. Patient routes must be restricted to the authenticated patient's own booking.",
+    ),
+    permission(
+        "patient_booking.list",
+        "List Patient Bookings",
+        "patient_booking",
+        "List patient bookings. Patient routes must return only the authenticated patient's own bookings.",
+    ),
+    permission(
+        "patient_booking.reschedule",
+        "Reschedule Patient Booking",
+        "patient_booking",
+        "Reschedule a patient booking to another available date and time.",
+    ),
+    permission(
+        "patient_booking.cancel",
+        "Cancel Patient Booking",
+        "patient_booking",
+        "Cancel an active patient booking.",
+    ),
+)
+
+
+# =========================================================
 # WEEK 5 - APPOINTMENT MANAGEMENT
 # =========================================================
 
 WEEK_5_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    *PATIENT_BOOKING_PERMISSIONS,
     permission(
         "appointments.view",
         "View Appointments",
@@ -943,9 +982,17 @@ PATIENT_ROLE_PERMISSION_CODES: tuple[str, ...] = (
     "patient_consent.download",
     "patient_consent.revoke",
 
-    # Week 5: own appointment booking and availability
-    # IMPORTANT: patient-facing routes must still scope data
-    # to the authenticated patient's own records.
+    # Patient Booking: own booking operations
+    # IMPORTANT: these permissions must only be used on routes
+    # that derive patient_id from the authenticated patient token.
+    "patient_booking.create",
+    "patient_booking.view",
+    "patient_booking.list",
+    "patient_booking.reschedule",
+    "patient_booking.cancel",
+
+    # Legacy/full appointment module permissions. Keep these only
+    # while the older appointment module remains registered.
     "appointments.view",
     "appointments.create",
     "appointment_slots.view",

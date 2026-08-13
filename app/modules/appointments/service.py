@@ -25,6 +25,7 @@ from app.modules.appointments.repository import (
 from app.modules.appointments.schema import (
     AppointmentActionRequest,
     AppointmentCreateRequest,
+    PatientAppointmentCreateRequest,
     AppointmentRescheduleRequest,
     AppointmentUpdateRequest,
     DoctorAvailabilityCreateRequest,
@@ -410,13 +411,22 @@ class AppointmentService:
             slot_date=slot_date,
         )
 
-        return (
-            await AppointmentRepository.get_available_slots(
+        slots = await AppointmentRepository.get_available_slots(
                 db,
                 doctor_id,
                 slot_date,
             )
-        )
+
+        if slot_date != today_local():
+            return slots
+
+        current_time = now_local().time()
+
+        return [
+            slot
+            for slot in slots
+            if slot.start_time > current_time
+        ]
 
     @staticmethod
     async def block_slot(
@@ -479,6 +489,40 @@ class AppointmentService:
     # =====================================================
 
     @staticmethod
+    async def create_patient_appointment(
+        db: AsyncSession,
+        payload: PatientAppointmentCreateRequest,
+        patient_id: int,
+        created_by: int,
+    ) -> Appointment:
+        slot = await AppointmentRepository.get_slot(
+            db=db,
+            slot_id=payload.slot_id,
+        )
+
+        if slot is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Appointment slot not found",
+            )
+
+        doctor_id = payload.doctor_id or slot.doctor_id
+
+        return await AppointmentService.create_appointment(
+            db=db,
+            payload=AppointmentCreateRequest(
+                patient_id=patient_id,
+                doctor_id=doctor_id,
+                slot_id=payload.slot_id,
+                appointment_type=AppointmentType.ONLINE,
+                reason=payload.reason,
+                notes=payload.notes,
+                booking_source="PATIENT_PORTAL",
+            ),
+            created_by=created_by,
+        )
+
+    @staticmethod
     async def create_appointment(
         db: AsyncSession,
         payload: AppointmentCreateRequest,
@@ -516,6 +560,15 @@ class AppointmentService:
                         "Cannot book an "
                         "appointment in the past"
                     ),
+                )
+
+            if (
+                slot.slot_date == today_local()
+                and slot.start_time <= now_local().time()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Selected appointment slot has already started",
                 )
 
             if slot.is_blocked:

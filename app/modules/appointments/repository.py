@@ -412,6 +412,29 @@ class AppointmentRepository:
         )
 
     @staticmethod
+    async def count_upcoming_patient_appointments(
+        db: AsyncSession,
+        patient_id: int,
+        from_date: date,
+    ) -> int:
+        result = await db.execute(
+            select(func.count(Appointment.id)).where(
+                Appointment.patient_id == patient_id,
+                Appointment.appointment_date >= from_date,
+                Appointment.status.in_(
+                    (
+                        "PENDING",
+                        "CONFIRMED",
+                        "CHECKED_IN",
+                        "IN_CONSULTATION",
+                    )
+                ),
+            )
+        )
+
+        return result.scalar() or 0
+
+    @staticmethod
     async def get_confirmed_appointments_until(
         db: AsyncSession,
         end_date: date,
