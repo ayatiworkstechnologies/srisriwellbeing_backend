@@ -22,6 +22,11 @@ from app.modules.rbac.association import RolePermission, UserRole
 from app.modules.rbac.model import Permission, Role
 from app.modules.users.model import User
 
+from app.modules.patient_booking.model import (
+    PatientBooking,
+    PatientBookingHistory,
+)
+
 __all__ = [
     "User",
     "UserSession",
