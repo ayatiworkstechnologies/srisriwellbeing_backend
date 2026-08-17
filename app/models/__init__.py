@@ -14,6 +14,15 @@ from app.modules.rbac.association import RolePermission, UserRole
 from app.modules.rbac.model import Permission, Role
 from app.modules.users.model import User
 
+from app.modules.duty_doctor.model import (
+    Consultation,
+    PatientVital,
+    Diagnosis,
+    ClinicalNote,
+    SpecialistReferral,
+    CaseShare,
+)
+
 __all__ = [
     "User",
     "UserSession",
@@ -32,4 +41,10 @@ __all__ = [
     "PatientExistingMedicine",
     "PatientMedicalHistory",
     "PatientSurgery",
+    "Consultation",
+    "PatientVital",
+    "Diagnosis",
+    "ClinicalNote",
+    "SpecialistReferral",
+    "CaseShare",
 ]

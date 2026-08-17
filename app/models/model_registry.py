@@ -27,6 +27,15 @@ from app.modules.patient_booking.model import (
     PatientBookingHistory,
 )
 
+from app.modules.duty_doctor.model import (
+    Consultation,
+    PatientVital,
+    Diagnosis,
+    ClinicalNote,
+    SpecialistReferral,
+    CaseShare,
+)
+
 __all__ = [
     "User",
     "UserSession",
@@ -51,4 +60,12 @@ __all__ = [
     "PatientEmergencyContact",
     "ConsentTemplate",
     "PatientConsent",
+    "PatientBooking",
+    "PatientBookingHistory",
+    "Consultation",
+    "PatientVital",
+    "Diagnosis",
+    "ClinicalNote",
+    "SpecialistReferral",
+    "CaseShare",
 ]

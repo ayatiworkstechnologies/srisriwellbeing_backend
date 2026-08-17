@@ -65,7 +65,11 @@ async def test_patient_booking_is_owned_and_forced_online(monkeypatch) -> None:
     created_appointment = SimpleNamespace(id=12)
     create = AsyncMock(return_value=created_appointment)
     db = object()
-    monkeypatch.setattr(AppointmentService, "create_patient_appointment", create)
+    monkeypatch.setattr(
+        AppointmentService,
+        "create_patient_appointment",
+        create,
+    )
 
     payload = PatientAppointmentCreateRequest(
         doctor_id=5,

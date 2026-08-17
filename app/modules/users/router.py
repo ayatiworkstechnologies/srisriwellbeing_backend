@@ -202,8 +202,7 @@ async def get_user(
 
 @router.post(
     "",
-    status_code=
-        status.HTTP_201_CREATED,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_user(
     payload: UserCreateRequest,

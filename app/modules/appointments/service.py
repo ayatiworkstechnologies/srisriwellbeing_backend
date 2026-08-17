@@ -84,12 +84,12 @@ class AppointmentService:
 
         if start_time >= end_time:
             raise HTTPException(
-        status_code=422,
-        detail=(
-            "start_time must be earlier "
-            "than end_time"
-        ),
-    )
+                status_code=422,
+                detail=(
+                    "start_time must be earlier "
+                    "than end_time"
+                ),
+            )
 
     @staticmethod
     async def _create_history(

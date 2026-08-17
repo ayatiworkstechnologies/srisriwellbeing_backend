@@ -25,6 +25,11 @@ from app.modules.patient_bookings.router import (
     router as patient_booking_router,
 )
 
+from app.modules.duty_doctor.router import (
+    router as duty_doctor_router,
+)
+
+
 api_router = APIRouter()
 
 
@@ -51,7 +56,7 @@ api_router.include_router(clinical_router)
 api_router.include_router(appointments_router)
 api_router.include_router(doctor_availability_router)
 api_router.include_router(patient_booking_router)
-
+api_router.include_router(duty_doctor_router)
 # Include staff-side patient CRUD only once
 api_router.include_router(
     patients_router,

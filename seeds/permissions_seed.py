@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+# Support direct execution with ``python seeds/permissions_seed.py``. In that
+# mode, Python adds ``seeds`` rather than the repository root to ``sys.path``.
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import AsyncSessionLocal, engine
-from app.modules.rbac.model import Permission
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from app.core.database import AsyncSessionLocal, engine  # noqa: E402
+from app.modules.rbac.model import Permission  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -905,6 +912,110 @@ WEEK_5_PERMISSIONS: tuple[PermissionSeed, ...] = (
 )
 
 
+# =========================================================
+# WEEK 6 - DUTY DOCTOR CONSULTATION
+# =========================================================
+
+WEEK_6_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    permission(
+        "consultations.create",
+        "Create Consultation",
+        "consultations",
+        "Start a patient consultation as an authorized duty doctor.",
+    ),
+    permission(
+        "consultations.view_own",
+        "View Own Consultations",
+        "consultations",
+        "View consultations assigned to or created by the authenticated duty doctor.",
+    ),
+    permission(
+        "consultations.view_all",
+        "View All Consultations",
+        "consultations",
+        "View all patient consultations. Intended for administrators and other explicitly authorized roles.",
+    ),
+    permission(
+        "consultations.update",
+        "Update Consultation",
+        "consultations",
+        "Update an active consultation, including medical assessment and clinical observations.",
+    ),
+    permission(
+        "consultations.status",
+        "Update Consultation Status",
+        "consultations",
+        "Change consultation status, including in-progress, referred, completed and cancelled states.",
+    ),
+    permission(
+        "consultations.history",
+        "View Consultation History",
+        "consultations",
+        "View a patient's previous consultation history.",
+    ),
+    permission(
+        "patient_vitals.view",
+        "View Patient Vitals",
+        "patient_vitals",
+        "View vital-sign records captured during a patient consultation.",
+    ),
+    permission(
+        "patient_vitals.manage",
+        "Manage Patient Vitals",
+        "patient_vitals",
+        "Create and update vital-sign records during an authorized patient consultation.",
+    ),
+    permission(
+        "clinical_notes.view",
+        "View Clinical Notes",
+        "clinical_notes",
+        "View initial clinical notes, assessment notes, observations and follow-up notes.",
+    ),
+    permission(
+        "clinical_notes.manage",
+        "Manage Clinical Notes",
+        "clinical_notes",
+        "Create and update clinical notes for an authorized patient consultation.",
+    ),
+    permission(
+        "diagnoses.view",
+        "View Diagnoses",
+        "diagnoses",
+        "View patient diagnoses recorded during consultations.",
+    ),
+    permission(
+        "diagnoses.manage",
+        "Manage Diagnoses",
+        "diagnoses",
+        "Record and update provisional, differential and final diagnoses.",
+    ),
+    permission(
+        "specialist_referrals.view",
+        "View Specialist Referrals",
+        "specialist_referrals",
+        "View specialist referrals associated with a patient consultation.",
+    ),
+    permission(
+        "specialist_referrals.manage",
+        "Manage Specialist Referrals",
+        "specialist_referrals",
+        "Create and update specialist referrals from an authorized consultation.",
+    ),
+    permission(
+        "case_shares.view",
+        "View Case Shares",
+        "case_shares",
+        "View clinical cases shared with authorized doctors or specialists.",
+    ),
+    permission(
+        "case_shares.manage",
+        "Manage Case Shares",
+        "case_shares",
+        "Share an authorized patient consultation with another doctor or specialist.",
+    ),
+)
+
+
 # Permissions assigned to the Patient role for the patient self-service portal.
 #
 # IMPORTANT:
@@ -1037,6 +1148,7 @@ ALL_PERMISSIONS: tuple[PermissionSeed, ...] = (
     *WEEK_3_PERMISSIONS,
     *WEEK_4_PERMISSIONS,
     *WEEK_5_PERMISSIONS,
+    *WEEK_6_PERMISSIONS,
     *APPLICATION_PERMISSIONS,
 )
 
@@ -1116,7 +1228,7 @@ async def seed_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Create or update all Week 1-5 permissions.
+    Create or update all Week 1-6 permissions.
 
     This function is idempotent:
     - existing permissions are matched using Permission.code;

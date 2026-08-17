@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+# Support direct execution with ``python seeds/roles_seed.py``. In that mode,
+# Python adds ``seeds`` (not the repository root) to the import search path.
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import AsyncSessionLocal, engine
-from app.modules.rbac.model import Role
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from app.core.database import AsyncSessionLocal, engine  # noqa: E402
+from app.modules.rbac.model import Role  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

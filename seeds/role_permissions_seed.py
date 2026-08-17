@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+# Support direct execution with ``python seeds/role_permissions_seed.py``. In
+# that mode, Python adds ``seeds`` instead of the repository root to the path.
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import AsyncSessionLocal, engine
-from app.modules.rbac.model import (
+from sqlalchemy import delete, select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from app.core.database import AsyncSessionLocal, engine  # noqa: E402
+from app.modules.rbac.model import (  # noqa: E402
     Permission,
     Role,
     RolePermission,
 )
-from seeds.permissions_seed import PATIENT_ROLE_PERMISSION_CODES
+from seeds.permissions_seed import PATIENT_ROLE_PERMISSION_CODES  # noqa: E402
 
 
 logger = logging.getLogger(__name__)
@@ -216,6 +223,75 @@ PHARMACIST_WEEK_5_PERMISSIONS = {
 }
 
 
+# =========================================================
+# WEEK 6 - DUTY DOCTOR CONSULTATION
+# =========================================================
+
+# Admin receives clinical visibility for supervision/audit,
+# but does not create or edit clinical records.
+ADMIN_WEEK_6_PERMISSIONS = {
+    "consultations.view_all",
+    "consultations.history",
+
+    "patient_vitals.view",
+    "clinical_notes.view",
+    "diagnoses.view",
+    "specialist_referrals.view",
+    "case_shares.view",
+}
+
+
+# Duty Doctor owns the Week 6 consultation workflow.
+DUTY_DOCTOR_WEEK_6_PERMISSIONS = {
+    "consultations.create",
+    "consultations.view_own",
+    "consultations.update",
+    "consultations.status",
+    "consultations.history",
+
+    "patient_vitals.view",
+    "patient_vitals.manage",
+
+    "clinical_notes.view",
+    "clinical_notes.manage",
+
+    "diagnoses.view",
+    "diagnoses.manage",
+
+    "specialist_referrals.view",
+    "specialist_referrals.manage",
+
+    "case_shares.view",
+    "case_shares.manage",
+}
+
+
+# Specialist Doctor can review clinical data shared/referred to them.
+# Specialist-specific acceptance/completion permissions can be added
+# later in the specialist consultation module.
+SPECIALIST_DOCTOR_WEEK_6_PERMISSIONS = {
+    "consultations.history",
+
+    "patient_vitals.view",
+    "clinical_notes.view",
+    "diagnoses.view",
+
+    "specialist_referrals.view",
+    "case_shares.view",
+}
+
+
+# Receptionist intentionally receives no Week 6 clinical permissions.
+# Receptionist continues to manage Week 5 appointment/check-in workflow.
+RECEPTIONIST_WEEK_6_PERMISSIONS: set[str] = set()
+
+
+# Therapist and Pharmacist do not receive Duty Doctor clinical
+# consultation permissions in Week 6.
+THERAPIST_WEEK_6_PERMISSIONS: set[str] = set()
+PHARMACIST_WEEK_6_PERMISSIONS: set[str] = set()
+
+
 RECEPTIONIST_PERMISSIONS = {
     *COMMON_AUTH_PERMISSIONS,
 
@@ -384,26 +460,32 @@ ROLE_PERMISSION_CODES: dict[str, set[str]] = {
         *ADMIN_PATIENT_PERMISSIONS,
         *ADMIN_WEEK_4_PERMISSIONS,
         *ADMIN_WEEK_5_PERMISSIONS,
+        *ADMIN_WEEK_6_PERMISSIONS,
     },
     "receptionist": {
         *RECEPTIONIST_PERMISSIONS,
         *RECEPTIONIST_WEEK_5_PERMISSIONS,
+        *RECEPTIONIST_WEEK_6_PERMISSIONS,
     },
     "duty_doctor": {
         *DUTY_DOCTOR_PERMISSIONS,
         *DUTY_DOCTOR_WEEK_5_PERMISSIONS,
+        *DUTY_DOCTOR_WEEK_6_PERMISSIONS,
     },
     "specialist_doctor": {
         *SPECIALIST_DOCTOR_PERMISSIONS,
         *SPECIALIST_DOCTOR_WEEK_5_PERMISSIONS,
+        *SPECIALIST_DOCTOR_WEEK_6_PERMISSIONS,
     },
     "therapist": {
         *THERAPIST_PERMISSIONS,
         *THERAPIST_WEEK_5_PERMISSIONS,
+        *THERAPIST_WEEK_6_PERMISSIONS,
     },
     "pharmacist": {
         *PHARMACIST_PERMISSIONS,
         *PHARMACIST_WEEK_5_PERMISSIONS,
+        *PHARMACIST_WEEK_6_PERMISSIONS,
     },
     "patient": set(PATIENT_ROLE_PERMISSION_CODES),
 }
@@ -516,8 +598,7 @@ def validate_configuration() -> None:
         )
 
     forbidden_admin_permissions = (
-        ROLE_PERMISSION_CODES["admin"]
-        & ADMIN_FORBIDDEN_CLINICAL_PERMISSIONS
+        ROLE_PERMISSION_CODES["admin"] & ADMIN_FORBIDDEN_CLINICAL_PERMISSIONS
     )
 
     if forbidden_admin_permissions:
@@ -593,10 +674,7 @@ async def load_permissions(
             permission_row
         )
 
-    missing_permissions = (
-        required_codes
-        - set(permissions_by_code)
-    )
+    missing_permissions = required_codes - set(permissions_by_code)
 
     if missing_permissions:
         preview = sorted(missing_permissions)
@@ -691,12 +769,12 @@ async def seed_role_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Synchronize Week 1-5 permissions for all default application roles.
+    Synchronize Week 1-6 permissions for all default application roles.
 
     Execution order:
     1. Run Alembic migrations.
     2. Run roles_seed.py.
-    3. Run permission_seed.py.
+    3. Run permissions_seed.py.
     4. Run this file.
     """
     validate_configuration()

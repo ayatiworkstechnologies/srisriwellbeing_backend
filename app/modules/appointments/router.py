@@ -28,9 +28,6 @@ from app.modules.appointments.schema import (
 from app.modules.appointments.service import (
     AppointmentService,
 )
-from app.modules.auth.dependencies import (
-    get_current_user,
-)
 from app.modules.rbac.dependencies import (
     require_permission,
 )
