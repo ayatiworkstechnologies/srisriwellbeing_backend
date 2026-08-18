@@ -416,3 +416,56 @@ class AppointmentCalendarResponse(BaseModel):
     appointment_type: str
 
     status: str
+
+
+
+
+class ReceptionPatientStatusResponse(BaseModel):
+    patient_id: int
+    appointment_date: date
+
+    has_active_appointment: bool
+
+    appointment_id: int | None = None
+    doctor_id: int | None = None
+    status: str | None = None
+
+    start_time: time | None = None
+    end_time: time | None = None
+
+
+class DutyDoctorOptionResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str | None = None
+
+
+class AvailableSlotResponse(BaseModel):
+    id: int
+    doctor_id: int
+
+    slot_date: date
+
+    start_time: time
+    end_time: time
+
+    is_available: bool
+
+
+class DoctorBookingAvailabilityResponse(BaseModel):
+    doctor_id: int
+    appointment_date: date
+
+    available_now: bool
+
+    available_slots: list[
+        AvailableSlotResponse
+    ]
+
+
+class AppointmentActionResponse(BaseModel):
+    success: bool
+    message: str
+
+    appointment_id: int
+    status: str

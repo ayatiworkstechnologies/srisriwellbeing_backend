@@ -15,9 +15,47 @@ from app.modules.appointments.model import (
     AppointmentWaitingList,
     DoctorAvailability,
 )
+from app.modules.rbac.association import UserRole
+from app.modules.rbac.model import Role
+from app.modules.users.model import User
 
 
 class AppointmentRepository:
+    @staticmethod
+    async def get_patient_active_appointment(
+        db: AsyncSession,
+        patient_id: int,
+        appointment_date: date,
+    ) -> Appointment | None:
+
+        active_statuses = (
+            "PENDING",
+            "CONFIRMED",
+            "CHECKED_IN",
+            "IN_CONSULTATION",
+        )
+
+        result = await db.execute(
+            select(Appointment)
+            .where(
+                Appointment.patient_id
+                == patient_id,
+
+                Appointment.appointment_date
+                == appointment_date,
+
+                Appointment.status.in_(
+                    active_statuses
+                ),
+            )
+            .order_by(
+                Appointment.id.desc()
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+    
 
     # =====================================================
     # DOCTOR AVAILABILITY
@@ -176,30 +214,34 @@ class AppointmentRepository:
     async def get_available_slots(
         db: AsyncSession,
         doctor_id: int,
-        slot_date: date,
+        appointment_date: date,
     ) -> list[AppointmentSlot]:
 
         result = await db.execute(
-            select(
-                AppointmentSlot,
-            )
+            select(AppointmentSlot)
             .where(
                 AppointmentSlot.doctor_id
                 == doctor_id,
+
                 AppointmentSlot.slot_date
-                == slot_date,
+                == appointment_date,
+
                 AppointmentSlot.is_available
                 .is_(True),
+
                 AppointmentSlot.is_blocked
                 .is_(False),
+
+                AppointmentSlot.appointment_id
+                .is_(None),
             )
             .order_by(
-                AppointmentSlot.start_time,
+                AppointmentSlot.start_time.asc()
             )
         )
 
         return list(
-            result.scalars().all(),
+            result.scalars().all()
         )
 
     @staticmethod
@@ -573,3 +615,107 @@ class AppointmentRepository:
         return list(
             result.scalars().all(),
         )
+
+    @staticmethod
+    async def get_duty_doctors(
+        db: AsyncSession,
+    ) -> list[User]:
+
+        result = await db.execute(
+            select(User)
+            .join(
+                UserRole,
+                UserRole.user_id == User.id,
+            )
+            .join(
+                Role,
+                Role.id == UserRole.role_id,
+            )
+            .where(
+                Role.name == "duty_doctor",
+                Role.is_active.is_(True),
+                User.is_active.is_(True),
+            )
+            .order_by(
+                User.full_name.asc()
+            )
+        )
+
+        return list(
+            result
+            .scalars()
+            .unique()
+            .all()
+        )
+
+    @staticmethod
+    async def get_duty_doctor_by_id(
+        db: AsyncSession,
+        doctor_id: int,
+    ) -> User | None:
+
+        result = await db.execute(
+            select(User)
+            .join(
+                UserRole,
+                UserRole.user_id == User.id,
+            )
+            .join(
+                Role,
+                Role.id == UserRole.role_id,
+            )
+            .where(
+                User.id == doctor_id,
+                User.is_active.is_(True),
+
+                Role.name == "duty_doctor",
+                Role.is_active.is_(True),
+            )
+        )
+
+        return result.scalars().unique().one_or_none()
+
+    @staticmethod
+    async def get_appointment_for_update(
+        db: AsyncSession,
+        appointment_id: int,
+    ) -> Appointment | None:
+
+        result = await db.execute(
+            select(Appointment)
+            .where(
+                Appointment.id
+                == appointment_id
+            )
+            .with_for_update()
+        )
+
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def add_status_history(
+        db: AsyncSession,
+        *,
+        appointment_id: int,
+        old_status: str | None,
+        new_status: str,
+        changed_by: int | None,
+        reason: str | None = None,
+        notes: str | None = None,
+    ) -> AppointmentStatusHistory:
+
+        history = AppointmentStatusHistory(
+            appointment_id=appointment_id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=changed_by,
+            reason=reason,
+            notes=notes,
+        )
+
+        db.add(history)
+
+        await db.flush()
+
+        return history
+    
