@@ -19,6 +19,7 @@ from app.modules.appointments.schema import (
     AppointmentCreateRequest,
     AppointmentRescheduleRequest,
     AppointmentUpdateRequest,
+    AvailableSlotsResponse,
     DoctorAvailabilityCreateRequest,
     DoctorAvailabilityUpdateRequest,
     DoctorBookingAvailabilityResponse,
@@ -121,6 +122,7 @@ async def reception_doctor_availability(
 
 @appointments_router.get(
     "/available-slots",
+    response_model=AvailableSlotsResponse,
 )
 async def get_available_slots(
     doctor_id: int,
@@ -141,7 +143,20 @@ async def get_available_slots(
     return {
         "success": True,
         "message": "Available slots fetched successfully",
-        "data": slots,
+        "data": [
+            {
+                "id": slot.id,
+                "slot_id": slot.id,
+                "doctor_id": slot.doctor_id,
+                "slot_date": slot.slot_date,
+                "start_time": slot.start_time,
+                "end_time": slot.end_time,
+                "is_available": slot.is_available,
+                "is_blocked": slot.is_blocked,
+                "appointment_id": slot.appointment_id,
+            }
+            for slot in slots
+        ],
     }
 
 

@@ -55,7 +55,6 @@ class AppointmentRepository:
         )
 
         return result.scalar_one_or_none()
-    
 
     # =====================================================
     # DOCTOR AVAILABILITY
@@ -718,4 +717,3 @@ class AppointmentRepository:
         await db.flush()
 
         return history
-    

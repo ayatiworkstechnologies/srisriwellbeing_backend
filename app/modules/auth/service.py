@@ -1,5 +1,6 @@
+import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +17,35 @@ from app.modules.auth.token_service import TokenService
 from app.modules.rbac.repository import RBACRepository
 from app.modules.users.model import User, UserStatus
 from app.modules.users.repository import UserRepository
+
+
+
+ALLOWED_STAFF_ROLE_NAMES = {
+    "admin",
+    "doctor",
+    "duty_doctor",
+    "specialist_doctor",
+    "special_doctor",
+    "receptionist",
+    "pharmacist",
+    "pharmacy",
+}
+
+
+def _normalize_role_name(value: str) -> str:
+    normalized = value.strip().lower()
+    normalized = re.sub(r"[\s-]+", "_", normalized)
+    return normalized
+
+
+def _utc_now_naive() -> datetime:
+    """
+    Return naive UTC for compatibility with the current auth/session
+    database columns. When the project migrates all DateTime columns to
+    timezone-aware UTC, this helper can return datetime.now(timezone.utc)
+    directly.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AuthService:
@@ -230,8 +260,19 @@ class AuthService:
     async def register(
         db: AsyncSession,
         payload: RegisterRequest,
+        current_user: User,
     ) -> dict:
-        email = payload.email.lower().strip()
+        """
+        Create a staff account.
+
+        Security rules:
+        - The router must require ``users.manage``.
+        - Only known staff roles may be assigned here.
+        - Patient accounts must use the patient registration flow.
+        - Assigning the admin role additionally requires ``rbac.manage``.
+        """
+
+        email = str(payload.email).lower().strip()
         phone = payload.phone.strip() if payload.phone else None
 
         role = await RBACRepository.get_role_by_id(
@@ -245,6 +286,29 @@ class AuthService:
                 detail="Role not found or inactive",
             )
 
+        normalized_role_name = _normalize_role_name(role.name)
+
+        if normalized_role_name not in ALLOWED_STAFF_ROLE_NAMES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="This role cannot be assigned through staff registration",
+            )
+
+        if normalized_role_name == "admin":
+            can_manage_rbac = await RBACRepository.user_has_permission(
+                db=db,
+                user_id=current_user.id,
+                permission_code="rbac.manage",
+            )
+
+            if not can_manage_rbac:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="rbac.manage permission is required to create an admin",
+                )
+
+        # The schema already validates equality, but keep this defensive
+        # service-layer check in case register() is called outside FastAPI.
         if payload.password != payload.confirm_password:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -253,7 +317,6 @@ class AuthService:
 
         try:
             PasswordService.validate_password(payload.password)
-
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -265,7 +328,7 @@ class AuthService:
             email=email,
         )
 
-        if existing_email:
+        if existing_email is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A user with this email already exists",
@@ -277,20 +340,23 @@ class AuthService:
                 phone=phone,
             )
 
-            if existing_phone:
+            if existing_phone is not None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="A user with this phone number already exists",
                 )
 
         user = User(
-            full_name=payload.full_name.strip(),
+            full_name=" ".join(payload.full_name.strip().split()),
             email=email,
             phone=phone,
             password_hash=PasswordService.hash_password(payload.password),
             status=UserStatus.ACTIVE.value,
             is_active=True,
-            is_verified=False,
+            # This endpoint is an authenticated staff-provisioning flow.
+            # Staff created by an authorized administrator are considered
+            # administratively verified.
+            is_verified=True,
         )
 
         try:
@@ -322,7 +388,7 @@ class AuthService:
 
         return {
             "success": True,
-            "message": "User registered successfully",
+            "message": "Staff user created successfully",
             "data": {
                 "id": created_user.id,
                 "full_name": created_user.full_name,
@@ -376,7 +442,7 @@ class AuthService:
                 detail="Invalid email or password",
             )
 
-        current_time = datetime.now()
+        current_time = _utc_now_naive()
 
         # Check temporary account lock.
         if (
@@ -761,7 +827,7 @@ class AuthService:
 
         new_refresh_token_hash = TokenService.hash_token(new_refresh_token)
 
-        new_expiry = datetime.now() + timedelta(
+        new_expiry = _utc_now_naive() + timedelta(
             days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
 
@@ -1086,7 +1152,7 @@ class AuthService:
             user_id=user.id,
             token_hash=reset_token_hash,
             expires_at=(
-                datetime.now()
+                _utc_now_naive()
                 + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
             ),
             is_used=False,

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -83,6 +84,10 @@ class Consultation(BaseModel):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "appointment_id",
+            name="uq_consultations_appointment_id",
+        ),
         Index(
             "ix_consultations_patient_status",
             "patient_id",

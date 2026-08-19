@@ -421,7 +421,7 @@ async def delete_user(
     ),
     current_user: User = Depends(
         require_permission(
-            "users.delete"
+            "users.manage"
         )
     ),
 ) -> dict:

@@ -6,7 +6,7 @@ Create Date: 2026-08-11
 """
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 revision = "20260811_0002"
 down_revision = "20260804_0001"
@@ -23,7 +23,7 @@ def _permission_columns() -> set[str]:
 
 
 def upgrade() -> None:
-    if "name" not in _permission_columns():
+    if context.is_offline_mode() or "name" not in _permission_columns():
         op.add_column(
             "permissions",
             sa.Column("name", sa.String(length=150), nullable=True),
@@ -48,5 +48,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if "name" in _permission_columns():
+    if context.is_offline_mode() or "name" in _permission_columns():
         op.drop_column("permissions", "name")

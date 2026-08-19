@@ -174,37 +174,12 @@ async def update_consultation_status(
         )
     )
 
-    old_status = consultation.status
-
-    consultation.status = data.status
-
-    from app.modules.duty_doctor.audit import (
-        create_clinical_audit,
-    )
-
-    await create_clinical_audit(
+    return await DutyDoctorService.update_status(
         db=db,
-        user_id=current_user.id,
-        action="STATUS_CHANGE",
-        entity_type="consultation",
-        entity_id=consultation.id,
-        description=(
-            "Consultation status changed "
-            f"from {old_status} "
-            f"to {data.status}"
-        ),
-        old_values={
-            "status": old_status,
-        },
-        new_values={
-            "status": data.status,
-        },
+        consultation=consultation,
+        doctor_id=current_user.id,
+        new_status=data.status,
     )
-
-    await db.commit()
-    await db.refresh(consultation)
-
-    return consultation
 
 
 # ============================================================
@@ -220,7 +195,7 @@ async def add_vitals(
     data: VitalCreate,
     current_user: User = Depends(
         require_permission(
-            "vitals.manage"
+            "patient_vitals.manage"
         )
     ),
     db: AsyncSession = Depends(get_db),
@@ -249,7 +224,7 @@ async def get_vitals(
     consultation_id: int,
     current_user: User = Depends(
         require_permission(
-            "vitals.view"
+            "patient_vitals.view"
         )
     ),
     db: AsyncSession = Depends(get_db),

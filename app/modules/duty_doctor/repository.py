@@ -59,6 +59,19 @@ class DutyDoctorRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_appointment(
+        db: AsyncSession,
+        appointment_id: int,
+    ) -> Consultation | None:
+        result = await db.execute(
+            select(Consultation).where(
+                Consultation.appointment_id == appointment_id
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_my_consultations(
         db: AsyncSession,
         doctor_id: int,

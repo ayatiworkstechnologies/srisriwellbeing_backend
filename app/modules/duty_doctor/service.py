@@ -1,8 +1,11 @@
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.appointments.enums import AppointmentStatus
+from app.modules.appointments.repository import AppointmentRepository
 from app.modules.duty_doctor.audit import (
     create_clinical_audit,
 )
@@ -26,6 +29,7 @@ from app.modules.duty_doctor.schemas import (
     SpecialistReferralCreate,
     VitalCreate,
 )
+from app.modules.patients.models import Patient
 
 
 class DutyDoctorService:
@@ -58,7 +62,74 @@ class DutyDoctorService:
         db: AsyncSession,
         doctor_id: int,
         data: ConsultationCreate,
+        *,
+        commit: bool = True,
     ) -> Consultation:
+
+        patient_exists = await db.scalar(
+            select(Patient.id).where(
+                Patient.id == data.patient_id
+            )
+        )
+
+        if patient_exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Patient not found",
+            )
+
+        if data.appointment_id is not None:
+            appointment = await AppointmentRepository.get_appointment(
+                db,
+                data.appointment_id,
+            )
+
+            if appointment is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Appointment not found",
+                )
+
+            if appointment.patient_id != data.patient_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        "Consultation patient does not match "
+                        "the appointment patient"
+                    ),
+                )
+
+            if appointment.doctor_id != doctor_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Appointment is assigned to another doctor",
+                )
+
+            if appointment.status not in {
+                AppointmentStatus.CHECKED_IN.value,
+                AppointmentStatus.IN_CONSULTATION.value,
+            }:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Appointment must be checked in before "
+                        "a consultation can start"
+                    ),
+                )
+
+            existing = await DutyDoctorRepository.get_by_appointment(
+                db=db,
+                appointment_id=data.appointment_id,
+            )
+
+            if existing is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "A consultation already exists for this "
+                        "appointment"
+                    ),
+                )
 
         consultation = Consultation(
             patient_id=data.patient_id,
@@ -86,8 +157,102 @@ class DutyDoctorService:
             },
         )
 
-        await db.commit()
-        await db.refresh(consultation)
+        if commit:
+            await db.commit()
+            await db.refresh(consultation)
+
+        return consultation
+
+    @staticmethod
+    async def update_status(
+        db: AsyncSession,
+        consultation: Consultation,
+        doctor_id: int,
+        new_status: str,
+    ) -> Consultation:
+        allowed_transitions = {
+            "IN_PROGRESS": {"REFERRED", "COMPLETED", "CANCELLED"},
+            "REFERRED": {"IN_PROGRESS", "COMPLETED", "CANCELLED"},
+            "COMPLETED": set(),
+            "CANCELLED": set(),
+        }
+
+        if new_status == consultation.status:
+            return consultation
+
+        if new_status not in allowed_transitions.get(
+            consultation.status,
+            set(),
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Cannot change consultation status from "
+                    f"{consultation.status} to {new_status}"
+                ),
+            )
+
+        if (
+            new_status == "COMPLETED"
+            and consultation.appointment_id is not None
+        ):
+            appointment = (
+                await AppointmentRepository.get_appointment_for_update(
+                    db=db,
+                    appointment_id=consultation.appointment_id,
+                )
+            )
+
+            if appointment is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Linked appointment no longer exists",
+                )
+
+            if appointment.status != AppointmentStatus.IN_CONSULTATION.value:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Linked appointment must be in consultation "
+                        "before it can be completed"
+                    ),
+                )
+
+            from app.modules.appointments.service import AppointmentService
+            from app.modules.appointments.utils import now_local
+
+            await AppointmentService._change_status(
+                db=db,
+                appointment=appointment,
+                new_status=AppointmentStatus.COMPLETED.value,
+                changed_by=doctor_id,
+                reason="Linked consultation completed",
+            )
+            appointment.completed_at = now_local()
+
+        old_status = consultation.status
+        consultation.status = new_status
+
+        await create_clinical_audit(
+            db=db,
+            user_id=doctor_id,
+            action="STATUS_CHANGE",
+            entity_type="consultation",
+            entity_id=consultation.id,
+            description=(
+                "Consultation status changed "
+                f"from {old_status} to {new_status}"
+            ),
+            old_values={"status": old_status},
+            new_values={"status": new_status},
+        )
+
+        try:
+            await db.commit()
+            await db.refresh(consultation)
+        except Exception:
+            await db.rollback()
+            raise
 
         return consultation
 

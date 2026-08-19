@@ -1,3 +1,6 @@
+import runpy
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -40,6 +43,17 @@ def test_required_week_one_and_four_tables_are_registered() -> None:
         "patient_consents",
     }
     assert expected <= set(Base.metadata.tables)
+
+
+def test_initial_migration_excludes_later_feature_tables() -> None:
+    migration = runpy.run_path(
+        Path("alembic/versions/20260804_0001_initial_schema.py")
+    )
+    initial_tables = migration["INITIAL_TABLE_NAMES"]
+
+    assert "appointments" not in initial_tables
+    assert "patient_bookings" not in initial_tables
+    assert "consultations" not in initial_tables
 
 
 def test_admin_is_not_a_clinical_authority_role() -> None:

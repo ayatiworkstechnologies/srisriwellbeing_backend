@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 
 from pydantic import (
     BaseModel,
@@ -8,6 +9,29 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+
+# ============================================================
+# COMMON BASE SCHEMA
+# ============================================================
+
+
+class StrictRequestModel(BaseModel):
+    """
+    Base model for API request payloads.
+
+    Unknown fields are rejected instead of silently ignored.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+
+# ============================================================
+# ROLE / PERMISSION RESPONSES
+# ============================================================
 
 
 class RoleResponse(BaseModel):
@@ -21,27 +45,44 @@ class PermissionResponse(BaseModel):
     name: str | None = None
 
 
+# ============================================================
+# USER PROFILE RESPONSES
+# ============================================================
+
+
 class UserProfileResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
 
     id: int
     full_name: str
     email: EmailStr
-    phone: str | None
+    phone: str | None = None
     status: str
     is_active: bool
     is_verified: bool
-    last_login_at: datetime | None
+    last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class AuthenticatedUserResponse(UserProfileResponse):
-    roles: list[str] = []
-    permissions: list[str] = []
+    roles: list[str] = Field(
+        default_factory=list,
+    )
+
+    permissions: list[str] = Field(
+        default_factory=list,
+    )
 
 
-class UserProfileUpdateRequest(BaseModel):
+# ============================================================
+# PROFILE UPDATE
+# ============================================================
+
+
+class UserProfileUpdateRequest(StrictRequestModel):
     full_name: str | None = Field(
         default=None,
         min_length=2,
@@ -63,10 +104,14 @@ class UserProfileUpdateRequest(BaseModel):
         if value is None:
             return None
 
-        normalized_value = " ".join(value.strip().split())
+        normalized_value = " ".join(
+            value.strip().split()
+        )
 
-        if not normalized_value:
-            raise ValueError("Full name cannot be empty")
+        if len(normalized_value) < 2:
+            raise ValueError(
+                "Full name must contain at least 2 characters"
+            )
 
         return normalized_value
 
@@ -79,22 +124,61 @@ class UserProfileUpdateRequest(BaseModel):
         if value is None:
             return None
 
-        normalized_value = value.strip()
+        value = value.strip()
 
-        if not normalized_value:
+        if not value:
             return None
 
-        return normalized_value
+        return validate_and_normalize_phone(value)
 
 
-class AccountStatusUpdateRequest(BaseModel):
+# ============================================================
+# ACCOUNT STATUS
+# ============================================================
+
+
+class AccountStatusUpdateRequest(StrictRequestModel):
     reason: str | None = Field(
         default=None,
         max_length=500,
     )
 
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
 
-class RegisterRequest(BaseModel):
+        normalized = " ".join(
+            value.strip().split()
+        )
+
+        if not normalized:
+            return None
+
+        return normalized
+
+
+# ============================================================
+# STAFF REGISTRATION
+# ============================================================
+
+
+class RegisterRequest(StrictRequestModel):
+    """
+    Staff account creation request.
+
+    IMPORTANT:
+    This schema contains role_id because /auth/register must
+    be protected by the `users.manage` permission.
+
+    Public patient registration must use a separate
+    patient registration schema and must NOT accept role_id.
+    """
+
     full_name: str = Field(
         min_length=2,
         max_length=150,
@@ -120,22 +204,35 @@ class RegisterRequest(BaseModel):
 
     role_id: int = Field(
         gt=0,
-        description="Active role to assign to the new user",
+        description=(
+            "Active staff role to assign to the new user. "
+            "The endpoint must require users.manage."
+        ),
     )
 
     @field_validator("full_name")
     @classmethod
-    def clean_full_name(cls, value: str) -> str:
-        cleaned_value = " ".join(value.strip().split())
+    def clean_full_name(
+        cls,
+        value: str,
+    ) -> str:
+        cleaned_value = " ".join(
+            value.strip().split()
+        )
 
         if len(cleaned_value) < 2:
-            raise ValueError("Full name must contain at least 2 characters")
+            raise ValueError(
+                "Full name must contain at least 2 characters"
+            )
 
         return cleaned_value
 
     @field_validator("email")
     @classmethod
-    def clean_email(cls, value: EmailStr) -> str:
+    def clean_email(
+        cls,
+        value: EmailStr,
+    ) -> str:
         return str(value).lower().strip()
 
     @field_validator("phone")
@@ -144,40 +241,41 @@ class RegisterRequest(BaseModel):
         cls,
         value: str | None,
     ) -> str | None:
-        if value is None or not value.strip():
+        if value is None:
             return None
 
-        cleaned_phone = (
-            value.strip()
-            .replace(" ", "")
-            .replace("-", "")
-            .replace("(", "")
-            .replace(")", "")
-        )
+        value = value.strip()
 
-        number_part = (
-            cleaned_phone[1:]
-            if cleaned_phone.startswith("+")
-            else cleaned_phone
-        )
+        if not value:
+            return None
 
-        if not number_part.isdigit():
-            raise ValueError("Phone number must contain only digits")
+        return validate_and_normalize_phone(value)
 
-        if len(number_part) < 10:
-            raise ValueError("Phone number must contain at least 10 digits")
-
-        return cleaned_phone
+    @field_validator("password")
+    @classmethod
+    def validate_password(
+        cls,
+        value: str,
+    ) -> str:
+        validate_password_strength(value)
+        return value
 
     @model_validator(mode="after")
     def validate_passwords(self):
         if self.password != self.confirm_password:
-            raise ValueError("Password and confirm password do not match")
+            raise ValueError(
+                "Password and confirm password do not match"
+            )
 
         return self
 
 
-class LoginRequest(BaseModel):
+# ============================================================
+# LOGIN
+# ============================================================
+
+
+class LoginRequest(StrictRequestModel):
     email: EmailStr
 
     password: str = Field(
@@ -189,42 +287,88 @@ class LoginRequest(BaseModel):
         default=None,
         gt=0,
         description=(
-            "Optional assigned role for this session. The first active "
-            "assigned role is used when omitted."
+            "Optional assigned role for this session. "
+            "The first active assigned role is used "
+            "when omitted."
         ),
     )
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: EmailStr) -> str:
+    def normalize_email(
+        cls,
+        value: EmailStr,
+    ) -> str:
         return str(value).lower().strip()
 
 
-class RefreshTokenRequest(BaseModel):
+# ============================================================
+# REFRESH TOKEN
+# ============================================================
+
+
+class RefreshTokenRequest(StrictRequestModel):
     refresh_token: str = Field(
         min_length=20,
+        max_length=4096,
     )
+
+    @field_validator("refresh_token")
+    @classmethod
+    def normalize_refresh_token(
+        cls,
+        value: str,
+    ) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "Refresh token cannot be empty"
+            )
+
+        return value
+
+
+# ============================================================
+# TOKEN RESPONSE
+# ============================================================
 
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    expires_in: int
+    expires_in: int = Field(
+        gt=0,
+    )
 
 
-class ForgotPasswordRequest(BaseModel):
+# ============================================================
+# FORGOT PASSWORD
+# ============================================================
+
+
+class ForgotPasswordRequest(StrictRequestModel):
     email: EmailStr
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: EmailStr) -> str:
+    def normalize_email(
+        cls,
+        value: EmailStr,
+    ) -> str:
         return str(value).lower().strip()
 
 
-class ResetPasswordRequest(BaseModel):
+# ============================================================
+# RESET PASSWORD
+# ============================================================
+
+
+class ResetPasswordRequest(StrictRequestModel):
     token: str = Field(
         min_length=20,
+        max_length=4096,
     )
 
     new_password: str = Field(
@@ -237,15 +381,50 @@ class ResetPasswordRequest(BaseModel):
         max_length=128,
     )
 
+    @field_validator("token")
+    @classmethod
+    def normalize_token(
+        cls,
+        value: str,
+    ) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "Reset token cannot be empty"
+            )
+
+        return value
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(
+        cls,
+        value: str,
+    ) -> str:
+        validate_password_strength(value)
+        return value
+
     @model_validator(mode="after")
     def validate_passwords(self):
-        if self.new_password != self.confirm_new_password:
-            raise ValueError("New password and confirm password do not match")
+        if (
+            self.new_password
+            != self.confirm_new_password
+        ):
+            raise ValueError(
+                "New password and confirm password "
+                "do not match"
+            )
 
         return self
 
 
-class ChangePasswordRequest(BaseModel):
+# ============================================================
+# CHANGE PASSWORD
+# ============================================================
+
+
+class ChangePasswordRequest(StrictRequestModel):
     current_password: str = Field(
         min_length=8,
         max_length=128,
@@ -261,14 +440,128 @@ class ChangePasswordRequest(BaseModel):
         max_length=128,
     )
 
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(
+        cls,
+        value: str,
+    ) -> str:
+        validate_password_strength(value)
+        return value
+
     @model_validator(mode="after")
     def validate_passwords(self):
-        if self.new_password != self.confirm_new_password:
-            raise ValueError("New password and confirm password do not match")
-
-        if self.current_password == self.new_password:
+        if (
+            self.new_password
+            != self.confirm_new_password
+        ):
             raise ValueError(
-                "New password must be different from current password"
+                "New password and confirm password "
+                "do not match"
+            )
+
+        if (
+            self.current_password
+            == self.new_password
+        ):
+            raise ValueError(
+                "New password must be different "
+                "from current password"
             )
 
         return self
+
+
+# ============================================================
+# VALIDATION HELPERS
+# ============================================================
+
+
+def validate_and_normalize_phone(
+    value: str,
+) -> str:
+    """
+    Normalize a phone number while preserving an optional
+    leading + character.
+    """
+
+    cleaned_phone = (
+        value.strip()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "")
+    )
+
+    if cleaned_phone.startswith("+"):
+        number_part = cleaned_phone[1:]
+    else:
+        number_part = cleaned_phone
+
+    if not number_part:
+        raise ValueError(
+            "Phone number cannot be empty"
+        )
+
+    if not number_part.isdigit():
+        raise ValueError(
+            "Phone number must contain only digits"
+        )
+
+    if len(number_part) < 10:
+        raise ValueError(
+            "Phone number must contain at least 10 digits"
+        )
+
+    if len(number_part) > 15:
+        raise ValueError(
+            "Phone number cannot contain more than 15 digits"
+        )
+
+    return cleaned_phone
+
+
+def validate_password_strength(
+    value: str,
+) -> None:
+    """
+    Basic password policy.
+
+    Requires:
+    - minimum length is already enforced by Field
+    - uppercase letter
+    - lowercase letter
+    - number
+    - special character
+    """
+
+    if value != value.strip():
+        raise ValueError(
+            "Password cannot start or end with spaces"
+        )
+
+    if not re.search(r"[A-Z]", value):
+        raise ValueError(
+            "Password must contain at least one "
+            "uppercase letter"
+        )
+
+    if not re.search(r"[a-z]", value):
+        raise ValueError(
+            "Password must contain at least one "
+            "lowercase letter"
+        )
+
+    if not re.search(r"\d", value):
+        raise ValueError(
+            "Password must contain at least one number"
+        )
+
+    if not re.search(
+        r"""[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`]""",
+        value,
+    ):
+        raise ValueError(
+            "Password must contain at least one "
+            "special character"
+        )

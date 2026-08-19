@@ -111,6 +111,18 @@ class AppointmentSlotResponse(BaseModel):
     appointment_id: int | None = None
 
 
+class AvailableSlotResponse(AppointmentSlotResponse):
+    """Available slot with an explicit booking identifier."""
+
+    slot_id: int
+
+
+class AvailableSlotsResponse(BaseModel):
+    success: bool
+    message: str
+    data: list[AvailableSlotResponse]
+
+
 # =========================================================
 # BLOCK / UNBLOCK SLOT
 # =========================================================
@@ -416,8 +428,6 @@ class AppointmentCalendarResponse(BaseModel):
     appointment_type: str
 
     status: str
-
-
 
 
 class ReceptionPatientStatusResponse(BaseModel):
