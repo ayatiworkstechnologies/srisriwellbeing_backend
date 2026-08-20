@@ -35,7 +35,7 @@ router = APIRouter()
 async def register(
     payload: RegisterRequest,
     db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(
+    current_user: User = Depends(
         require_permission("users.manage")
     ),
 ) -> dict:
@@ -54,6 +54,7 @@ async def register(
     return await AuthService.register(
         db=db,
         payload=payload,
+        current_user=current_user,
     )
 
 

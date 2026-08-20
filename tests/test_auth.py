@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from app.api.endpoints.auth import register
 from app.modules.auth.schema import LoginRequest, RegisterRequest
 from app.modules.auth.service import AuthService
 from app.modules.auth.token_service import TokenService
@@ -25,6 +26,39 @@ def test_register_requires_positive_role_id() -> None:
 
     with pytest.raises(ValidationError):
         RegisterRequest(**valid_payload, role_id=0)
+
+
+@pytest.mark.asyncio
+async def test_register_forwards_authenticated_user_to_service() -> None:
+    payload = RegisterRequest(
+        full_name="Test User",
+        email="test@example.com",
+        phone="+919876543210",
+        password="StrongPass1!",
+        confirm_password="StrongPass1!",
+        role_id=2,
+    )
+    db = AsyncMock()
+    current_user = SimpleNamespace(id=1)
+    expected = {"success": True}
+
+    with patch.object(
+        AuthService,
+        "register",
+        new=AsyncMock(return_value=expected),
+    ) as register_user:
+        result = await register(
+            payload=payload,
+            db=db,
+            current_user=current_user,
+        )
+
+    assert result == expected
+    register_user.assert_awaited_once_with(
+        db=db,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def test_login_allows_role_to_be_selected_or_omitted() -> None:

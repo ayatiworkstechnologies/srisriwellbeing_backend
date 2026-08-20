@@ -19,7 +19,6 @@ from app.modules.users.model import User, UserStatus
 from app.modules.users.repository import UserRepository
 
 
-
 ALLOWED_STAFF_ROLE_NAMES = {
     "admin",
     "doctor",
@@ -291,7 +290,10 @@ class AuthService:
         if normalized_role_name not in ALLOWED_STAFF_ROLE_NAMES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="This role cannot be assigned through staff registration",
+                detail=(
+                    "This role cannot be assigned through staff "
+                    "registration"
+                ),
             )
 
         if normalized_role_name == "admin":
@@ -304,7 +306,10 @@ class AuthService:
             if not can_manage_rbac:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="rbac.manage permission is required to create an admin",
+                    detail=(
+                        "rbac.manage permission is required to create "
+                        "an admin"
+                    ),
                 )
 
         # The schema already validates equality, but keep this defensive

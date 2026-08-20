@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -51,7 +51,7 @@ async def test_forgot_password_hides_token_outside_development(
     )
     monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "PASSWORD_RESET_EXPIRE_MINUTES", 17)
-    started_at = datetime.now()
+    started_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     response = await AuthService.forgot_password(
         db=db,
