@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ============================================================
@@ -83,10 +83,38 @@ class VitalCreate(BaseModel):
         le=100,
     )
 
-    height_cm: Decimal | None = None
-    weight_kg: Decimal | None = None
+    height_cm: Decimal | None = Field(
+        default=None,
+        ge=30,
+        le=300,
+        description="Height in centimetres",
+    )
+    weight_kg: Decimal | None = Field(
+        default=None,
+        gt=0,
+        le=1000,
+        description="Weight in kilograms",
+    )
 
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_calculated_bmi(self):
+        """Keep calculated BMI within the patient_vitals DECIMAL(5,2)."""
+        if self.height_cm is None or self.weight_kg is None:
+            return self
+
+        height_m = self.height_cm / Decimal("100")
+        bmi = (self.weight_kg / (height_m * height_m)).quantize(
+            Decimal("0.01")
+        )
+
+        if bmi > Decimal("999.99"):
+            raise ValueError(
+                "height_cm and weight_kg produce a BMI outside the supported range"
+            )
+
+        return self
 
 
 class VitalResponse(BaseModel):

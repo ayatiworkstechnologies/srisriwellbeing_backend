@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Path, Request, status
+from fastapi import APIRouter, Depends, Path, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import require_permission
 from app.modules.auth.dependencies import (
@@ -22,6 +23,21 @@ from app.modules.users.model import User
 
 
 router = APIRouter()
+
+
+def _set_access_token_cookie(
+    response: Response,
+    access_token: str,
+) -> None:
+    """Make browser authentication work alongside bearer auth."""
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.access_token_expire_seconds,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+    )
 
 
 # ============================================================
@@ -66,6 +82,7 @@ async def register(
 async def login(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -83,7 +100,7 @@ async def login(
         else None
     )
 
-    return await AuthService.login(
+    result = await AuthService.login(
         db=db,
         email=payload.email,
         password=payload.password,
@@ -93,6 +110,13 @@ async def login(
         ),
         ip_address=ip_address,
     )
+
+    _set_access_token_cookie(
+        response=response,
+        access_token=result["data"]["access_token"],
+    )
+
+    return result
 
 
 # ============================================================
@@ -135,16 +159,24 @@ async def get_me(
 @router.post("/refresh")
 async def refresh_token(
     payload: RefreshTokenRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Generate a new access token using a valid refresh token.
     """
 
-    return await AuthService.refresh_token(
+    result = await AuthService.refresh_token(
         db=db,
         refresh_token=payload.refresh_token,
     )
+
+    _set_access_token_cookie(
+        response=response,
+        access_token=result["data"]["access_token"],
+    )
+
+    return result
 
 
 # ============================================================
@@ -154,16 +186,26 @@ async def refresh_token(
 @router.post("/logout")
 async def logout(
     auth_context: CurrentAuthContext,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Logout the current session.
     """
 
-    return await AuthService.logout(
+    result = await AuthService.logout(
         db=db,
         session_id=auth_context.session_id,
     )
+
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+    )
+
+    return result
 
 
 # ============================================================

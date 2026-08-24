@@ -2,10 +2,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from pydantic import ValidationError
 
-from app.api.endpoints.auth import register
+from app.api.endpoints.auth import login, register
 from app.modules.auth.schema import LoginRequest, RegisterRequest
 from app.modules.auth.service import AuthService
 from app.modules.auth.token_service import TokenService
@@ -59,6 +59,40 @@ async def test_register_forwards_authenticated_user_to_service() -> None:
         payload=payload,
         current_user=current_user,
     )
+
+
+@pytest.mark.asyncio
+async def test_login_sets_an_http_only_access_cookie() -> None:
+    payload = LoginRequest(
+        email="test@example.com",
+        password="StrongPass1!",
+    )
+    request = SimpleNamespace(
+        client=SimpleNamespace(host="127.0.0.1"),
+        headers={},
+    )
+    response = Response()
+    result = {
+        "success": True,
+        "data": {"access_token": "access-token"},
+    }
+
+    with patch.object(
+        AuthService,
+        "login",
+        new=AsyncMock(return_value=result),
+    ):
+        returned = await login(
+            payload=payload,
+            request=request,
+            response=response,
+            db=AsyncMock(),
+        )
+
+    assert returned == result
+    cookie = response.headers["set-cookie"]
+    assert "access_token=access-token" in cookie
+    assert "HttpOnly" in cookie
 
 
 def test_login_allows_role_to_be_selected_or_omitted() -> None:

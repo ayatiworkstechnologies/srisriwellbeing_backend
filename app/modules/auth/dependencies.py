@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ class AuthContext:
 
 
 async def get_auth_context(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,
         Depends(bearer_scheme),
@@ -42,14 +43,23 @@ async def get_auth_context(
         },
     )
 
-    if credentials is None:
-        raise unauthorized
-
-    if credentials.scheme.lower() != "bearer":
+    if (
+        credentials is not None
+        and credentials.scheme.lower() != "bearer"
+    ):
         raise unauthorized
 
     try:
-        payload = TokenService.decode_token(credentials.credentials)
+        token = (
+            credentials.credentials
+            if credentials is not None
+            else request.cookies.get("access_token")
+        )
+
+        if not token:
+            raise unauthorized
+
+        payload = TokenService.decode_token(token)
 
         if payload.get("token_type") != "access":
             raise unauthorized

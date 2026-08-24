@@ -1181,17 +1181,6 @@ class AppointmentService:
                 detail="Appointment is assigned to another doctor",
             )
 
-        await AppointmentService._change_status(
-            db=db,
-            appointment=appointment,
-            new_status=(
-                AppointmentStatus.IN_CONSULTATION.value
-            ),
-            changed_by=changed_by,
-            reason=payload.reason,
-            notes=payload.notes,
-        )
-
         from app.modules.duty_doctor.repository import (
             DutyDoctorRepository,
         )
@@ -1209,6 +1198,43 @@ class AppointmentService:
             )
         )
 
+        if (
+            existing_consultation is not None
+            and existing_consultation.duty_doctor_id != changed_by
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Appointment is linked to another doctor's "
+                    "consultation"
+                ),
+            )
+
+        # Starting a consultation is safe to retry.  Clients commonly retry
+        # this request after a timeout, and the appointment may already have
+        # been transitioned by the original request.
+        if (
+            appointment.status
+            == AppointmentStatus.IN_CONSULTATION.value
+            and existing_consultation is not None
+        ):
+            return appointment
+
+        if (
+            appointment.status
+            != AppointmentStatus.IN_CONSULTATION.value
+        ):
+            await AppointmentService._change_status(
+                db=db,
+                appointment=appointment,
+                new_status=(
+                    AppointmentStatus.IN_CONSULTATION.value
+                ),
+                changed_by=changed_by,
+                reason=payload.reason,
+                notes=payload.notes,
+            )
+
         if existing_consultation is None:
             await DutyDoctorService.create_consultation(
                 db=db,
@@ -1219,15 +1245,6 @@ class AppointmentService:
                 ),
                 commit=False,
             )
-        elif existing_consultation.duty_doctor_id != changed_by:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Appointment is linked to another doctor's "
-                    "consultation"
-                ),
-            )
-
         appointment.consultation_started_at = (
             now_local()
         )

@@ -223,6 +223,55 @@ async def test_start_appointment_creates_linked_consultation(
 
 
 @pytest.mark.asyncio
+async def test_start_appointment_is_idempotent_for_own_consultation(
+    monkeypatch,
+) -> None:
+    started_at = object()
+    appointment = SimpleNamespace(
+        id=10,
+        patient_id=42,
+        doctor_id=7,
+        status=AppointmentStatus.IN_CONSULTATION.value,
+        consultation_started_at=started_at,
+    )
+    db = SimpleNamespace(
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        AppointmentRepository,
+        "get_appointment",
+        AsyncMock(return_value=appointment),
+    )
+    monkeypatch.setattr(
+        DutyDoctorRepository,
+        "get_by_appointment",
+        AsyncMock(
+            return_value=SimpleNamespace(duty_doctor_id=7),
+        ),
+    )
+    change_status = AsyncMock()
+    monkeypatch.setattr(
+        AppointmentService,
+        "_change_status",
+        change_status,
+    )
+
+    result = await AppointmentService.start_consultation(
+        db=db,
+        appointment_id=10,
+        changed_by=7,
+        payload=AppointmentActionRequest(),
+    )
+
+    assert result is appointment
+    assert appointment.consultation_started_at is started_at
+    change_status.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_complete_appointment_completes_linked_consultation(
     monkeypatch,
 ) -> None:
