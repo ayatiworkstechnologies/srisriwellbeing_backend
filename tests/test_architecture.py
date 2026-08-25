@@ -74,6 +74,17 @@ def test_clinical_routes_are_versioned() -> None:
     assert "/api/v1/patients/consent-templates" in paths
 
 
+def test_consultation_routes_have_canonical_and_legacy_paths() -> None:
+    routes = {
+        (method, route.path)
+        for route in app.routes
+        for method in getattr(route, "methods", set())
+    }
+
+    assert ("POST", "/api/v1/consultations") in routes
+    assert ("POST", "/api/v1/duty-doctor/consultations") in routes
+
+
 def test_allergies_restrict_type_and_severity() -> None:
     allergy = AllergyCreate(
         allergy_type="drug",

@@ -34,6 +34,10 @@ from app.modules.duty_doctor.service import (
 )
 
 
+consultations_router = APIRouter(
+    tags=["Duty Doctor Consultation"],
+)
+
 router = APIRouter(
     prefix="/duty-doctor",
     tags=["Duty Doctor Consultation"],
@@ -44,7 +48,7 @@ router = APIRouter(
 # START CONSULTATION
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations",
     response_model=ConsultationResponse,
 )
@@ -68,7 +72,7 @@ async def create_consultation(
 # MY CONSULTATIONS
 # ============================================================
 
-@router.get(
+@consultations_router.get(
     "/consultations/my",
     response_model=list[ConsultationResponse],
 )
@@ -92,7 +96,7 @@ async def my_consultations(
 # CONSULTATION DETAILS
 # ============================================================
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}",
     response_model=ConsultationResponse,
 )
@@ -118,7 +122,7 @@ async def get_consultation(
 # UPDATE CONSULTATION
 # ============================================================
 
-@router.patch(
+@consultations_router.patch(
     "/consultations/{consultation_id}",
     response_model=ConsultationResponse,
 )
@@ -152,7 +156,7 @@ async def update_consultation(
 # UPDATE CONSULTATION STATUS
 # ============================================================
 
-@router.patch(
+@consultations_router.patch(
     "/consultations/{consultation_id}/status",
     response_model=ConsultationResponse,
 )
@@ -186,7 +190,7 @@ async def update_consultation_status(
 # VITALS
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations/{consultation_id}/vitals",
     response_model=VitalResponse,
 )
@@ -216,7 +220,7 @@ async def add_vitals(
     )
 
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}/vitals",
     response_model=list[VitalResponse],
 )
@@ -245,7 +249,7 @@ async def get_vitals(
 # CLINICAL NOTES
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations/{consultation_id}/notes",
     response_model=ClinicalNoteResponse,
 )
@@ -275,7 +279,7 @@ async def add_note(
     )
 
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}/notes",
     response_model=list[ClinicalNoteResponse],
 )
@@ -304,7 +308,7 @@ async def get_notes(
 # DIAGNOSIS
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations/{consultation_id}/diagnoses",
     response_model=DiagnosisResponse,
 )
@@ -334,7 +338,7 @@ async def add_diagnosis(
     )
 
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}/diagnoses",
     response_model=list[DiagnosisResponse],
 )
@@ -363,7 +367,7 @@ async def get_diagnoses(
 # SPECIALIST REFERRAL
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations/{consultation_id}/referrals",
     response_model=SpecialistReferralResponse,
 )
@@ -393,7 +397,7 @@ async def create_referral(
     )
 
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}/referrals",
     response_model=list[
         SpecialistReferralResponse
@@ -424,7 +428,7 @@ async def get_referrals(
 # CASE SHARING
 # ============================================================
 
-@router.post(
+@consultations_router.post(
     "/consultations/{consultation_id}/case-shares",
     response_model=CaseShareResponse,
 )
@@ -454,7 +458,7 @@ async def share_case(
     )
 
 
-@router.get(
+@consultations_router.get(
     "/consultations/{consultation_id}/case-shares",
     response_model=list[CaseShareResponse],
 )
@@ -500,3 +504,7 @@ async def patient_consultation_history(
         db=db,
         patient_id=patient_id,
     )
+
+
+# Keep the original duty-doctor namespace available for existing clients.
+router.include_router(consultations_router)
