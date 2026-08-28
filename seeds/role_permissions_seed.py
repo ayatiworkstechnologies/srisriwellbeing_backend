@@ -432,6 +432,101 @@ PHARMACIST_WEEK_6_PERMISSIONS: set[str] = set()
 
 
 # =========================================================
+# WEEK 8 - SPECIALIST DOCTOR + TREATMENT PLAN ENGINE
+# =========================================================
+
+# ---------------------------------------------------------
+# ADMIN
+# ---------------------------------------------------------
+#
+# Week 8 treatment-plan clinical actions belong to
+# Specialist Doctors. Admin receives no Week 8 clinical
+# write permissions from this seed.
+# ---------------------------------------------------------
+
+ADMIN_WEEK_8_PERMISSIONS: set[str] = set()
+
+
+# ---------------------------------------------------------
+# RECEPTIONIST
+# ---------------------------------------------------------
+
+RECEPTIONIST_WEEK_8_PERMISSIONS: set[str] = set()
+
+
+# ---------------------------------------------------------
+# DUTY DOCTOR
+# ---------------------------------------------------------
+#
+# Duty Doctor completes Week 6 consultation/referral flow.
+# Week 8 treatment-plan creation/review belongs to the
+# Specialist Doctor workflow.
+# ---------------------------------------------------------
+
+DUTY_DOCTOR_WEEK_8_PERMISSIONS: set[str] = set()
+
+
+# ---------------------------------------------------------
+# SPECIALIST DOCTOR
+# ---------------------------------------------------------
+
+SPECIALIST_DOCTOR_WEEK_8_PERMISSIONS = {
+    # Specialist case review
+    "specialist_cases.view",
+    "specialist_cases.history",
+
+    # Treatment plan
+    "treatment_plans.create",
+    "treatment_plans.view",
+    "treatment_plans.view_own",
+    "treatment_plans.update",
+    "treatment_plans.delete",
+    "treatment_plans.submit",
+    "treatment_plans.review",
+    "treatment_plans.approve",
+    "treatment_plans.finalize",
+    "treatment_plans.cancel",
+
+    # Therapy selection
+    "treatment_plan_therapies.view",
+    "treatment_plan_therapies.manage",
+
+    # Medicine recommendation
+    "treatment_plan_medicines.view",
+    "treatment_plan_medicines.manage",
+
+    # Generic services/items
+    "treatment_plan_items.view",
+    "treatment_plan_items.manage",
+
+    # Multi-specialist collaboration
+    "treatment_plan_specialists.view",
+    "treatment_plan_specialists.manage",
+
+    # Server-side pricing
+    "treatment_plan_pricing.calculate",
+
+    # Version + status history
+    "treatment_plan_versions.view",
+    "treatment_plan_status_history.view",
+}
+
+
+# ---------------------------------------------------------
+# THERAPIST
+# ---------------------------------------------------------
+
+THERAPIST_WEEK_8_PERMISSIONS: set[str] = set()
+
+
+# ---------------------------------------------------------
+# PHARMACIST
+# ---------------------------------------------------------
+
+PHARMACIST_WEEK_8_PERMISSIONS: set[str] = set()
+
+
+# =========================================================
 # RECEPTIONIST - WEEK 1 TO 4
 # =========================================================
 
@@ -643,36 +738,42 @@ ROLE_PERMISSION_CODES: dict[str, set[str]] = {
         *ADMIN_WEEK_4_PERMISSIONS,
         *ADMIN_WEEK_5_PERMISSIONS,
         *ADMIN_WEEK_6_PERMISSIONS,
+        *ADMIN_WEEK_8_PERMISSIONS,
     },
 
     "receptionist": {
         *RECEPTIONIST_PERMISSIONS,
         *RECEPTIONIST_WEEK_5_PERMISSIONS,
         *RECEPTIONIST_WEEK_6_PERMISSIONS,
+        *RECEPTIONIST_WEEK_8_PERMISSIONS,
     },
 
     "duty_doctor": {
         *DUTY_DOCTOR_PERMISSIONS,
         *DUTY_DOCTOR_WEEK_5_PERMISSIONS,
         *DUTY_DOCTOR_WEEK_6_PERMISSIONS,
+        *DUTY_DOCTOR_WEEK_8_PERMISSIONS,
     },
 
     "specialist_doctor": {
         *SPECIALIST_DOCTOR_PERMISSIONS,
         *SPECIALIST_DOCTOR_WEEK_5_PERMISSIONS,
         *SPECIALIST_DOCTOR_WEEK_6_PERMISSIONS,
+        *SPECIALIST_DOCTOR_WEEK_8_PERMISSIONS,
     },
 
     "therapist": {
         *THERAPIST_PERMISSIONS,
         *THERAPIST_WEEK_5_PERMISSIONS,
         *THERAPIST_WEEK_6_PERMISSIONS,
+        *THERAPIST_WEEK_8_PERMISSIONS,
     },
 
     "pharmacist": {
         *PHARMACIST_PERMISSIONS,
         *PHARMACIST_WEEK_5_PERMISSIONS,
         *PHARMACIST_WEEK_6_PERMISSIONS,
+        *PHARMACIST_WEEK_8_PERMISSIONS,
     },
 
     "patient": set(
@@ -714,6 +815,23 @@ ADMIN_FORBIDDEN_CLINICAL_PERMISSIONS = {
     "treatment_plan.finalize",
     "treatment_plan.revise",
     "treatment_plan.cancel",
+
+    # Week 8 Treatment Plan Engine - clinical writes
+    "treatment_plans.create",
+    "treatment_plans.update",
+    "treatment_plans.delete",
+    "treatment_plans.submit",
+    "treatment_plans.review",
+    "treatment_plans.approve",
+    "treatment_plans.finalize",
+    "treatment_plans.cancel",
+
+    "treatment_plan_therapies.manage",
+    "treatment_plan_medicines.manage",
+    "treatment_plan_items.manage",
+    "treatment_plan_specialists.manage",
+
+    "treatment_plan_pricing.calculate",
 }
 
 
@@ -731,6 +849,22 @@ RECEPTIONIST_FORBIDDEN_CLINICAL_PERMISSIONS = {
     "diagnoses.manage",
     "specialist_referrals.manage",
     "case_shares.manage",
+
+    # Week 8 Specialist Doctor / Treatment Plan Engine
+    "treatment_plans.create",
+    "treatment_plans.update",
+    "treatment_plans.delete",
+    "treatment_plans.submit",
+    "treatment_plans.review",
+    "treatment_plans.approve",
+    "treatment_plans.finalize",
+    "treatment_plans.cancel",
+
+    "treatment_plan_therapies.manage",
+    "treatment_plan_medicines.manage",
+    "treatment_plan_items.manage",
+    "treatment_plan_specialists.manage",
+    "treatment_plan_pricing.calculate",
 }
 
 
@@ -963,6 +1097,45 @@ def validate_configuration() -> None:
             f"{sorted(missing_receptionist_permissions)}"
         )
 
+    # -----------------------------------------------------
+    # SPECIALIST DOCTOR WEEK 8 REQUIREMENTS
+    # -----------------------------------------------------
+
+    required_specialist_week_8_permissions = {
+        "specialist_cases.view",
+        "specialist_cases.history",
+        "treatment_plans.create",
+        "treatment_plans.view",
+        "treatment_plans.view_own",
+        "treatment_plans.update",
+        "treatment_plans.submit",
+        "treatment_plan_therapies.view",
+        "treatment_plan_therapies.manage",
+        "treatment_plan_medicines.view",
+        "treatment_plan_medicines.manage",
+        "treatment_plan_items.view",
+        "treatment_plan_items.manage",
+        "treatment_plan_specialists.view",
+        "treatment_plan_specialists.manage",
+        "treatment_plan_pricing.calculate",
+        "treatment_plan_versions.view",
+        "treatment_plan_status_history.view",
+    }
+
+    missing_specialist_week_8_permissions = (
+        required_specialist_week_8_permissions
+        - ROLE_PERMISSION_CODES[
+            "specialist_doctor"
+        ]
+    )
+
+    if missing_specialist_week_8_permissions:
+        raise ValueError(
+            "Specialist Doctor is missing required "
+            "Week 8 treatment-plan permissions: "
+            f"{sorted(missing_specialist_week_8_permissions)}"
+        )
+
 
 # =========================================================
 # LOAD DEFAULT ROLES
@@ -1181,7 +1354,7 @@ async def seed_role_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Synchronize Week 1-6 permissions for all default roles.
+    Synchronize Week 1-8 permissions for all default roles.
 
     Correct execution order:
 
@@ -1350,7 +1523,7 @@ if __name__ == "__main__":
             "%(asctime)s | "
             "%(levelname)s | "
             "%(name)s | "
-            "%(message)s"
+            "%(message)s" 
         ),
     )
 

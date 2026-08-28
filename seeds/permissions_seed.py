@@ -1016,6 +1016,169 @@ WEEK_6_PERMISSIONS: tuple[PermissionSeed, ...] = (
 )
 
 
+# =========================================================
+# WEEK 8 - SPECIALIST DOCTOR + TREATMENT PLAN ENGINE
+# =========================================================
+
+WEEK_8_PERMISSIONS: tuple[PermissionSeed, ...] = (
+    # Specialist case review
+    permission(
+        "specialist_cases.view",
+        "View Specialist Cases",
+        "specialist_cases",
+        "View patient cases assigned or shared with the specialist.",
+    ),
+    permission(
+        "specialist_cases.history",
+        "View Specialist Patient History",
+        "specialist_cases",
+        "View consultation history for patients under specialist review.",
+    ),
+
+    # Treatment plans
+    permission(
+        "treatment_plans.create",
+        "Create Treatment Plan",
+        "treatment_plans",
+        "Create a new specialist treatment plan.",
+    ),
+    permission(
+        "treatment_plans.view",
+        "View Treatment Plan",
+        "treatment_plans",
+        "View an accessible treatment plan.",
+    ),
+    permission(
+        "treatment_plans.view_own",
+        "View Own Treatment Plans",
+        "treatment_plans",
+        "List treatment plans created by the authenticated specialist.",
+    ),
+    permission(
+        "treatment_plans.update",
+        "Update Treatment Plan",
+        "treatment_plans",
+        "Update an editable treatment plan.",
+    ),
+    permission(
+        "treatment_plans.delete",
+        "Delete Draft Treatment Plan",
+        "treatment_plans",
+        "Delete a treatment plan while it remains in DRAFT status.",
+    ),
+    permission(
+        "treatment_plans.submit",
+        "Submit Treatment Plan",
+        "treatment_plans",
+        "Submit a treatment plan for review.",
+    ),
+    permission(
+        "treatment_plans.review",
+        "Review Treatment Plan",
+        "treatment_plans",
+        "Review a submitted treatment plan and request modifications when needed.",
+    ),
+    permission(
+        "treatment_plans.approve",
+        "Approve Treatment Plan",
+        "treatment_plans",
+        "Approve a treatment plan after clinical review.",
+    ),
+    permission(
+        "treatment_plans.finalize",
+        "Finalize Treatment Plan",
+        "treatment_plans",
+        "Finalize an approved treatment plan and make it read-only.",
+    ),
+    permission(
+        "treatment_plans.cancel",
+        "Cancel Treatment Plan",
+        "treatment_plans",
+        "Cancel an eligible treatment plan with a reason.",
+    ),
+
+    # Treatment plan therapies
+    permission(
+        "treatment_plan_therapies.view",
+        "View Treatment Plan Therapies",
+        "treatment_plan_therapies",
+        "View therapies attached to a treatment plan.",
+    ),
+    permission(
+        "treatment_plan_therapies.manage",
+        "Manage Treatment Plan Therapies",
+        "treatment_plan_therapies",
+        "Add, update and remove therapies from an editable treatment plan.",
+    ),
+
+    # Treatment plan medicines
+    permission(
+        "treatment_plan_medicines.view",
+        "View Treatment Plan Medicines",
+        "treatment_plan_medicines",
+        "View medicine recommendations attached to a treatment plan.",
+    ),
+    permission(
+        "treatment_plan_medicines.manage",
+        "Manage Treatment Plan Medicines",
+        "treatment_plan_medicines",
+        "Add, update and remove medicine recommendations from an editable treatment plan.",
+    ),
+
+    # Treatment plan items / services
+    permission(
+        "treatment_plan_items.view",
+        "View Treatment Plan Items",
+        "treatment_plan_items",
+        "View service, procedure and other items attached to a treatment plan.",
+    ),
+    permission(
+        "treatment_plan_items.manage",
+        "Manage Treatment Plan Items",
+        "treatment_plan_items",
+        "Add, update and remove service, procedure and other treatment-plan items.",
+    ),
+
+    # Multi-specialist collaboration
+    permission(
+        "treatment_plan_specialists.view",
+        "View Treatment Plan Specialists",
+        "treatment_plan_specialists",
+        "View specialists collaborating on a treatment plan.",
+    ),
+    permission(
+        "treatment_plan_specialists.manage",
+        "Manage Treatment Plan Specialists",
+        "treatment_plan_specialists",
+        "Add or remove collaborating specialists from an editable treatment plan.",
+    ),
+
+    # Pricing
+    permission(
+        "treatment_plan_pricing.calculate",
+        "Calculate Treatment Plan Pricing",
+        "treatment_plan_pricing",
+        "Calculate therapy, medicine, room and service pricing for a treatment plan.",
+    ),
+
+    # Version history
+    permission(
+        "treatment_plan_versions.view",
+        "View Treatment Plan Versions",
+        "treatment_plan_versions",
+        "View immutable treatment-plan version history.",
+    ),
+
+    # Status history
+    permission(
+        "treatment_plan_status_history.view",
+        "View Treatment Plan Status History",
+        "treatment_plan_status_history",
+        "View treatment-plan workflow status history.",
+    ),
+)
+
+
 # Permissions assigned to the Patient role for the patient self-service portal.
 #
 # IMPORTANT:
@@ -1149,6 +1312,7 @@ ALL_PERMISSIONS: tuple[PermissionSeed, ...] = (
     *WEEK_4_PERMISSIONS,
     *WEEK_5_PERMISSIONS,
     *WEEK_6_PERMISSIONS,
+    *WEEK_8_PERMISSIONS,
     *APPLICATION_PERMISSIONS,
 )
 
@@ -1228,7 +1392,7 @@ async def seed_permissions(
     db: AsyncSession,
 ) -> dict[str, int]:
     """
-    Create or update all Week 1-6 permissions.
+    Create or update all configured permissions, including Week 8.
 
     This function is idempotent:
     - existing permissions are matched using Permission.code;

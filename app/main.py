@@ -7,13 +7,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401
-from app.api.endpoints.health import router as health_router
+
+from app.api.endpoints.health import (
+    router as health_router,
+)
 from app.api.router import api_router
+
 from app.core.config import settings
 from app.core.database import engine
-from app.core.exceptions import register_exception_handlers
+from app.core.exceptions import (
+    register_exception_handlers,
+)
 from app.core.logging import configure_logging
-from app.core.schema_migrations import ensure_patient_portal_schema
+from app.core.schema_migrations import (
+    ensure_patient_portal_schema,
+)
 from app.models.base import Base
 
 from app.modules.patients.portal.auth_router import (
@@ -26,14 +34,35 @@ from app.modules.patients.portal.appointments_router import (
     router as patient_appointments_router,
 )
 
+# =========================================================
+# WEEK 8 - TREATMENT PLANS
+# =========================================================
+
+from app.modules.treatment_plans.router import (
+    router as treatment_plans_router,
+)
+
 
 # =========================================================
 # LOGGING
 # =========================================================
 
-configure_logging(settings.LOG_LEVEL)
+configure_logging(
+    settings.LOG_LEVEL
+)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(
+    __name__
+)
+
+
+# =========================================================
+# REGISTER MODULE ROUTERS
+# =========================================================
+
+api_router.include_router(
+    treatment_plans_router
+)
 
 
 # =========================================================
@@ -41,13 +70,19 @@ logger = logging.getLogger(__name__)
 # =========================================================
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI,
+):
 
     # Alembic owns schema changes outside local development.
-    # This fallback allows a fresh local developer database
-    # to create tables automatically.
+    #
+    # For local development, create_all provides a fallback
+    # when a developer is using a new local database.
 
-    if settings.APP_ENV.lower() == "development":
+    if (
+        settings.APP_ENV.lower()
+        == "development"
+    ):
 
         async with engine.begin() as connection:
 
@@ -91,7 +126,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=(
+        settings.allowed_origins_list
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,7 +139,9 @@ app.add_middleware(
 # EXCEPTION HANDLERS
 # =========================================================
 
-register_exception_handlers(app)
+register_exception_handlers(
+    app
+)
 
 
 # =========================================================
@@ -117,10 +156,14 @@ async def request_logging_middleware(
 
     request_id = request.headers.get(
         "x-request-id",
-        str(uuid.uuid4()),
+        str(
+            uuid.uuid4()
+        ),
     )
 
-    started_at = time.perf_counter()
+    started_at = (
+        time.perf_counter()
+    )
 
     response = await call_next(
         request
@@ -142,13 +185,20 @@ async def request_logging_middleware(
     logger.info(
         "Request completed",
         extra={
-            "request_id": request_id,
-            "method": request.method,
-            "path": request.url.path,
-            "status_code": (
-                response.status_code
-            ),
-            "duration_ms": duration_ms,
+            "request_id":
+                request_id,
+
+            "method":
+                request.method,
+
+            "path":
+                request.url.path,
+
+            "status_code":
+                response.status_code,
+
+            "duration_ms":
+                duration_ms,
         },
     )
 
@@ -157,16 +207,33 @@ async def request_logging_middleware(
 
 # =========================================================
 # MAIN VERSIONED API
+#
+# Example:
+#
+# /api/v1/auth
+# /api/v1/patients
+# /api/v1/consultations
+# /api/v1/treatment-plans
 # =========================================================
 
 app.include_router(
     api_router,
-    prefix=settings.API_V1_PREFIX,
+    prefix=(
+        settings.API_V1_PREFIX
+    ),
 )
 
 
 # =========================================================
 # COMPATIBILITY / LEGACY API
+#
+# Existing compatibility routes:
+#
+# /api/auth
+# /api/patients
+# /api/treatment-plans
+#
+# Not displayed in Swagger.
 # =========================================================
 
 app.include_router(
@@ -174,6 +241,11 @@ app.include_router(
     prefix="/api",
     include_in_schema=False,
 )
+
+
+# =========================================================
+# HEALTH
+# =========================================================
 
 app.include_router(
     health_router,

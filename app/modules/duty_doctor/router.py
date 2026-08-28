@@ -1,7 +1,10 @@
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
+    status,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,6 +13,9 @@ from app.modules.rbac.dependencies import (
 )
 from app.modules.users.model import User
 
+from app.modules.duty_doctor.model import (
+    Consultation,
+)
 from app.modules.duty_doctor.repository import (
     DutyDoctorRepository,
 )
@@ -34,18 +40,39 @@ from app.modules.duty_doctor.service import (
 )
 
 
-consultations_router = APIRouter(
-    tags=["Duty Doctor Consultation"],
-)
+# ============================================================
+# CONSULTATION ROUTER
+#
+# Mounted directly to expose:
+#
+# /api/v1/consultations
+# ============================================================
 
-router = APIRouter(
-    prefix="/duty-doctor",
-    tags=["Duty Doctor Consultation"],
+consultations_router = APIRouter(
+    tags=[
+        "Duty Doctor Consultation"
+    ],
 )
 
 
 # ============================================================
-# START CONSULTATION
+# DUTY DOCTOR NAMESPACE
+#
+# Used for:
+#
+# /api/v1/duty-doctor/...
+# ============================================================
+
+router = APIRouter(
+    prefix="/duty-doctor",
+    tags=[
+        "Duty Doctor Consultation"
+    ],
+)
+
+
+# ============================================================
+# CREATE CONSULTATION
 # ============================================================
 
 @consultations_router.post(
@@ -59,12 +86,16 @@ async def create_consultation(
             "consultations.create"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    return await DutyDoctorService.create_consultation(
-        db=db,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.create_consultation(
+            db=db,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
@@ -74,7 +105,9 @@ async def create_consultation(
 
 @consultations_router.get(
     "/consultations/my",
-    response_model=list[ConsultationResponse],
+    response_model=list[
+        ConsultationResponse
+    ],
 )
 async def my_consultations(
     current_user: User = Depends(
@@ -82,7 +115,9 @@ async def my_consultations(
             "consultations.view_own"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     return (
         await DutyDoctorRepository.get_my_consultations(
@@ -90,6 +125,68 @@ async def my_consultations(
             doctor_id=current_user.id,
         )
     )
+
+
+# ============================================================
+# GET CONSULTATION BY APPOINTMENT
+#
+# IMPORTANT:
+#
+# Keep this route BEFORE:
+#
+# /consultations/{consultation_id}
+#
+# Otherwise "by-appointment" may be interpreted
+# as the consultation_id route segment.
+# ============================================================
+
+@consultations_router.get(
+    "/consultations/by-appointment/{appointment_id}",
+    response_model=ConsultationResponse,
+)
+async def get_consultation_by_appointment(
+    appointment_id: int,
+    current_user: User = Depends(
+        require_permission(
+            "consultations.view_own"
+        )
+    ),
+    db: AsyncSession = Depends(
+        get_db
+    ),
+):
+    result = await db.execute(
+        select(
+            Consultation
+        )
+        .where(
+            Consultation.appointment_id
+            == appointment_id,
+            Consultation.doctor_id
+            == current_user.id,
+        )
+        .order_by(
+            Consultation.id.desc()
+        )
+    )
+
+    consultation = (
+        result.scalars()
+        .first()
+    )
+
+    if consultation is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Consultation not found "
+                "for this appointment"
+            ),
+        )
+
+    return consultation
 
 
 # ============================================================
@@ -107,12 +204,16 @@ async def get_consultation(
             "consultations.view_own"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     return (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
@@ -134,21 +235,27 @@ async def update_consultation(
             "consultations.update"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.update_consultation(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.update_consultation(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
@@ -168,21 +275,27 @@ async def update_consultation_status(
             "consultations.status"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.update_status(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        new_status=data.status,
+    return (
+        await DutyDoctorService.update_status(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            new_status=data.status,
+        )
     )
 
 
@@ -202,27 +315,35 @@ async def add_vitals(
             "patient_vitals.manage"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.add_vitals(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.add_vitals(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
 @consultations_router.get(
     "/consultations/{consultation_id}/vitals",
-    response_model=list[VitalResponse],
+    response_model=list[
+        VitalResponse
+    ],
 )
 async def get_vitals(
     consultation_id: int,
@@ -231,17 +352,27 @@ async def get_vitals(
             "patient_vitals.view"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    await DutyDoctorService.require_own_consultation(
-        db=db,
-        consultation_id=consultation_id,
-        doctor_id=current_user.id,
+    await (
+        DutyDoctorService.require_own_consultation(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+            doctor_id=current_user.id,
+        )
     )
 
-    return await DutyDoctorRepository.get_vitals(
-        db=db,
-        consultation_id=consultation_id,
+    return (
+        await DutyDoctorRepository.get_vitals(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+        )
     )
 
 
@@ -261,27 +392,35 @@ async def add_note(
             "clinical_notes.manage"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.add_note(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.add_note(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
 @consultations_router.get(
     "/consultations/{consultation_id}/notes",
-    response_model=list[ClinicalNoteResponse],
+    response_model=list[
+        ClinicalNoteResponse
+    ],
 )
 async def get_notes(
     consultation_id: int,
@@ -290,17 +429,27 @@ async def get_notes(
             "clinical_notes.view"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    await DutyDoctorService.require_own_consultation(
-        db=db,
-        consultation_id=consultation_id,
-        doctor_id=current_user.id,
+    await (
+        DutyDoctorService.require_own_consultation(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+            doctor_id=current_user.id,
+        )
     )
 
-    return await DutyDoctorRepository.get_notes(
-        db=db,
-        consultation_id=consultation_id,
+    return (
+        await DutyDoctorRepository.get_notes(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+        )
     )
 
 
@@ -320,27 +469,35 @@ async def add_diagnosis(
             "diagnoses.manage"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.add_diagnosis(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.add_diagnosis(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
 @consultations_router.get(
     "/consultations/{consultation_id}/diagnoses",
-    response_model=list[DiagnosisResponse],
+    response_model=list[
+        DiagnosisResponse
+    ],
 )
 async def get_diagnoses(
     consultation_id: int,
@@ -349,17 +506,27 @@ async def get_diagnoses(
             "diagnoses.view"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    await DutyDoctorService.require_own_consultation(
-        db=db,
-        consultation_id=consultation_id,
-        doctor_id=current_user.id,
+    await (
+        DutyDoctorService.require_own_consultation(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+            doctor_id=current_user.id,
+        )
     )
 
-    return await DutyDoctorRepository.get_diagnoses(
-        db=db,
-        consultation_id=consultation_id,
+    return (
+        await DutyDoctorRepository.get_diagnoses(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+        )
     )
 
 
@@ -379,21 +546,27 @@ async def create_referral(
             "specialist_referrals.manage"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.add_referral(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.add_referral(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
@@ -410,17 +583,27 @@ async def get_referrals(
             "specialist_referrals.view"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    await DutyDoctorService.require_own_consultation(
-        db=db,
-        consultation_id=consultation_id,
-        doctor_id=current_user.id,
+    await (
+        DutyDoctorService.require_own_consultation(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+            doctor_id=current_user.id,
+        )
     )
 
-    return await DutyDoctorRepository.get_referrals(
-        db=db,
-        consultation_id=consultation_id,
+    return (
+        await DutyDoctorRepository.get_referrals(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+        )
     )
 
 
@@ -440,27 +623,35 @@ async def share_case(
             "case_shares.manage"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
     consultation = (
         await DutyDoctorService.require_own_consultation(
             db=db,
-            consultation_id=consultation_id,
+            consultation_id=(
+                consultation_id
+            ),
             doctor_id=current_user.id,
         )
     )
 
-    return await DutyDoctorService.share_case(
-        db=db,
-        consultation=consultation,
-        doctor_id=current_user.id,
-        data=data,
+    return (
+        await DutyDoctorService.share_case(
+            db=db,
+            consultation=consultation,
+            doctor_id=current_user.id,
+            data=data,
+        )
     )
 
 
 @consultations_router.get(
     "/consultations/{consultation_id}/case-shares",
-    response_model=list[CaseShareResponse],
+    response_model=list[
+        CaseShareResponse
+    ],
 )
 async def get_case_shares(
     consultation_id: int,
@@ -469,17 +660,27 @@ async def get_case_shares(
             "case_shares.view"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    await DutyDoctorService.require_own_consultation(
-        db=db,
-        consultation_id=consultation_id,
-        doctor_id=current_user.id,
+    await (
+        DutyDoctorService.require_own_consultation(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+            doctor_id=current_user.id,
+        )
     )
 
-    return await DutyDoctorRepository.get_case_shares(
-        db=db,
-        consultation_id=consultation_id,
+    return (
+        await DutyDoctorRepository.get_case_shares(
+            db=db,
+            consultation_id=(
+                consultation_id
+            ),
+        )
     )
 
 
@@ -489,7 +690,9 @@ async def get_case_shares(
 
 @router.get(
     "/patients/{patient_id}/history",
-    response_model=list[ConsultationResponse],
+    response_model=list[
+        ConsultationResponse
+    ],
 )
 async def patient_consultation_history(
     patient_id: int,
@@ -498,13 +701,22 @@ async def patient_consultation_history(
             "consultations.history"
         )
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(
+        get_db
+    ),
 ):
-    return await DutyDoctorRepository.patient_history(
-        db=db,
-        patient_id=patient_id,
+    return (
+        await DutyDoctorRepository.patient_history(
+            db=db,
+            patient_id=patient_id,
+        )
     )
 
 
-# Keep the original duty-doctor namespace available for existing clients.
-router.include_router(consultations_router)
+# ============================================================
+# KEEP ORIGINAL DUTY-DOCTOR NAMESPACE
+# ============================================================
+
+router.include_router(
+    consultations_router
+)
