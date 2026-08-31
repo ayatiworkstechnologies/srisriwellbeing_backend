@@ -1,3 +1,4 @@
+from datetime import date, time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,6 +15,8 @@ from app.modules.appointments.repository import AppointmentRepository
 from app.modules.appointments.schema import (
     AppointmentActionRequest,
     AppointmentCreateRequest,
+    DoctorAvailabilityCreateRequest,
+    DoctorAvailabilityUpdateRequest,
     PatientAppointmentCreateRequest,
 )
 from app.modules.appointments.service import AppointmentService
@@ -25,7 +28,10 @@ from app.modules.patients.portal.appointments_router import (
     get_patient_appointment,
     list_patient_appointments,
 )
-from seeds.role_permissions_seed import RECEPTIONIST_WEEK_5_PERMISSIONS
+from seeds.role_permissions_seed import (
+    DUTY_DOCTOR_WEEK_5_PERMISSIONS,
+    RECEPTIONIST_WEEK_5_PERMISSIONS,
+)
 
 
 def test_staff_and_patient_appointment_routes_are_registered() -> None:
@@ -65,6 +71,110 @@ def test_receptionist_can_submit_walk_in_and_online_types(
     assert payload.appointment_type is appointment_type
     assert payload.booking_source is BookingSource.RECEPTION
     assert "appointments.create" in RECEPTIONIST_WEEK_5_PERMISSIONS
+
+
+def test_duty_doctor_can_manage_own_availability() -> None:
+    assert (
+        "doctor_availability.manage_own"
+        in DUTY_DOCTOR_WEEK_5_PERMISSIONS
+    )
+
+
+def test_duty_doctor_cannot_manage_another_doctors_availability() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        AppointmentService._require_availability_owner(
+            doctor_id=8,
+            actor_id=7,
+            can_manage_all=False,
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_availability_update_rebuilds_future_unbooked_slots(
+    monkeypatch,
+) -> None:
+    availability = SimpleNamespace(
+        id=3,
+        doctor_id=7,
+        day_of_week=1,
+        start_time=time(9),
+        end_time=time(12),
+        slot_duration_minutes=30,
+        is_active=True,
+    )
+    stale_slot = SimpleNamespace(
+        slot_date=date(2026, 9, 1),
+    )
+    db = SimpleNamespace(
+        delete=AsyncMock(),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        AppointmentRepository,
+        "get_availability_by_id",
+        AsyncMock(return_value=availability),
+    )
+    monkeypatch.setattr(
+        AppointmentRepository,
+        "get_future_unbooked_slots",
+        AsyncMock(return_value=[stale_slot]),
+    )
+
+    result = await AppointmentService.update_doctor_availability(
+        db=db,
+        availability_id=3,
+        payload=DoctorAvailabilityUpdateRequest(
+            start_time=time(10),
+        ),
+        actor_id=7,
+        can_manage_all=False,
+    )
+
+    assert result.start_time == time(10)
+    db.delete.assert_awaited_once_with(stale_slot)
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_duty_doctor_creates_own_availability(monkeypatch) -> None:
+    db = SimpleNamespace(
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    create_availability = AsyncMock()
+    monkeypatch.setattr(
+        AppointmentRepository,
+        "get_duty_doctor_by_id",
+        AsyncMock(return_value=SimpleNamespace(id=7)),
+    )
+    monkeypatch.setattr(
+        AppointmentRepository,
+        "create_availability",
+        create_availability,
+    )
+
+    result = await AppointmentService.create_doctor_availability(
+        db=db,
+        payload=DoctorAvailabilityCreateRequest(
+            doctor_id=7,
+            day_of_week=1,
+            start_time=time(9),
+            end_time=time(12),
+            slot_duration_minutes=30,
+        ),
+        actor_id=7,
+        can_manage_all=False,
+    )
+
+    assert result.doctor_id == 7
+    assert result.start_time == time(9)
+    create_availability.assert_awaited_once()
+    db.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio

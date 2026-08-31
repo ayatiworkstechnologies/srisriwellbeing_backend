@@ -210,6 +210,23 @@ class AppointmentRepository:
         )
 
     @staticmethod
+    async def get_future_unbooked_slots(
+        db: AsyncSession,
+        doctor_id: int,
+        from_date: date,
+    ) -> list[AppointmentSlot]:
+        result = await db.execute(
+            select(AppointmentSlot).where(
+                AppointmentSlot.doctor_id == doctor_id,
+                AppointmentSlot.slot_date >= from_date,
+                AppointmentSlot.appointment_id.is_(None),
+                AppointmentSlot.is_blocked.is_(False),
+            )
+        )
+
+        return list(result.scalars().all())
+
+    @staticmethod
     async def get_available_slots(
         db: AsyncSession,
         doctor_id: int,

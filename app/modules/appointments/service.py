@@ -73,6 +73,37 @@ VALID_STATUS_TRANSITIONS = {
 class AppointmentService:
 
     @staticmethod
+    def _require_availability_owner(
+        doctor_id: int,
+        actor_id: int,
+        can_manage_all: bool,
+    ) -> None:
+        if doctor_id != actor_id and not can_manage_all:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Duty doctors can manage only their own "
+                    "availability"
+                ),
+            )
+
+    @staticmethod
+    async def _clear_future_unbooked_slots(
+        db: AsyncSession,
+        doctor_id: int,
+        days_of_week: set[int],
+    ) -> None:
+        slots = await AppointmentRepository.get_future_unbooked_slots(
+            db=db,
+            doctor_id=doctor_id,
+            from_date=today_local(),
+        )
+
+        for slot in slots:
+            if slot.slot_date.weekday() in days_of_week:
+                await db.delete(slot)
+
+    @staticmethod
     async def get_reception_patient_status(
         db: AsyncSession,
         patient_id: int,
@@ -461,7 +492,27 @@ class AppointmentService:
     async def create_doctor_availability(
         db: AsyncSession,
         payload: DoctorAvailabilityCreateRequest,
+        *,
+        actor_id: int,
+        can_manage_all: bool,
     ) -> DoctorAvailability:
+
+        AppointmentService._require_availability_owner(
+            doctor_id=payload.doctor_id,
+            actor_id=actor_id,
+            can_manage_all=can_manage_all,
+        )
+
+        doctor = await AppointmentRepository.get_duty_doctor_by_id(
+            db=db,
+            doctor_id=payload.doctor_id,
+        )
+
+        if doctor is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Selected doctor must be an active Duty Doctor",
+            )
 
         AppointmentService._validate_time_range(
             payload.start_time,
@@ -502,6 +553,9 @@ class AppointmentService:
         db: AsyncSession,
         availability_id: int,
         payload: DoctorAvailabilityUpdateRequest,
+        *,
+        actor_id: int,
+        can_manage_all: bool,
     ) -> DoctorAvailability:
 
         availability = (
@@ -519,6 +573,14 @@ class AppointmentService:
                     "not found"
                 ),
             )
+
+        AppointmentService._require_availability_owner(
+            doctor_id=availability.doctor_id,
+            actor_id=actor_id,
+            can_manage_all=can_manage_all,
+        )
+
+        previous_day_of_week = availability.day_of_week
 
         update_data = (
             payload.model_dump(
@@ -540,6 +602,15 @@ class AppointmentService:
             availability.end_time,
         )
 
+        await AppointmentService._clear_future_unbooked_slots(
+            db=db,
+            doctor_id=availability.doctor_id,
+            days_of_week={
+                previous_day_of_week,
+                availability.day_of_week,
+            },
+        )
+
         try:
             await db.commit()
 
@@ -557,6 +628,9 @@ class AppointmentService:
     async def delete_doctor_availability(
         db: AsyncSession,
         availability_id: int,
+        *,
+        actor_id: int,
+        can_manage_all: bool,
     ) -> None:
 
         availability = (
@@ -574,6 +648,18 @@ class AppointmentService:
                     "not found"
                 ),
             )
+
+        AppointmentService._require_availability_owner(
+            doctor_id=availability.doctor_id,
+            actor_id=actor_id,
+            can_manage_all=can_manage_all,
+        )
+
+        await AppointmentService._clear_future_unbooked_slots(
+            db=db,
+            doctor_id=availability.doctor_id,
+            days_of_week={availability.day_of_week},
+        )
 
         availability.is_active = False
 

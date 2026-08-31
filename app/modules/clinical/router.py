@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.permissions import require_permission
+from app.modules.rbac.dependencies import require_role
 from app.modules.clinical.schemas import (
     AllergyCreate,
     ConditionCreate,
@@ -15,7 +16,22 @@ from app.modules.clinical.schemas import (
 )
 from app.modules.clinical.service import ClinicalService
 
-router = APIRouter(prefix="/patients", tags=["Clinical Records"])
+router = APIRouter(
+    prefix="/patients",
+    tags=["Clinical Records"],
+    dependencies=[
+        Depends(
+            require_role(
+                "admin",
+                "receptionist",
+                "duty_doctor",
+                "specialist_doctor",
+                "therapist",
+                "pharmacist",
+            )
+        )
+    ],
+)
 CLINICAL_RESOURCE_PATTERN = (
     "^(conditions|surgeries|medicines|allergies|"
     "emergency-contacts|consents)$"
@@ -93,7 +109,7 @@ async def create_allergy(
     payload: AllergyCreate,
     patient_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    user=Depends(require_permission("allergy.manage")),
+    user=Depends(require_permission("allergy.create")),
 ):
     return await _create(db, patient_id, "allergies", payload, user)
 
@@ -113,7 +129,7 @@ async def capture_consent(
     payload: PatientConsentCreate,
     patient_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    user=Depends(require_permission("consent.manage")),
+    user=Depends(require_permission("patient_consent.capture")),
 ):
     return await _create(db, patient_id, "consents", payload, user)
 
@@ -123,7 +139,7 @@ async def revoke_consent(
     patient_id: int = Path(gt=0),
     consent_id: int = Path(gt=0),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("consent.manage")),
+    _user=Depends(require_permission("patient_consent.revoke")),
 ):
     return await ClinicalService.revoke_consent(db, patient_id, consent_id)
 
@@ -132,7 +148,7 @@ async def revoke_consent(
 async def create_consent_template(
     payload: ConsentTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("consent.manage")),
+    _user=Depends(require_permission("consent_template.create")),
 ):
     return await ClinicalService.create_template(db, payload.model_dump())
 

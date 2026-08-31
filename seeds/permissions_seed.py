@@ -898,6 +898,12 @@ WEEK_5_PERMISSIONS: tuple[PermissionSeed, ...] = (
         "Create, update and disable doctor availability.",
     ),
     permission(
+        "doctor_availability.manage_own",
+        "Manage Own Doctor Availability",
+        "doctor_availability",
+        "Manage the authenticated doctor's availability.",
+    ),
+    permission(
         "appointment_waiting_list.view",
         "View Appointment Waiting List",
         "appointment_waiting_list",

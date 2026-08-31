@@ -36,6 +36,7 @@ from app.modules.appointments.service import (
 from app.modules.rbac.dependencies import (
     require_permission,
 )
+from app.modules.rbac.repository import RBACRepository
 from app.modules.users.model import User
 
 
@@ -738,12 +739,22 @@ async def create_doctor_availability(
     current_user: User = Depends(
         require_permission(
             "doctor_availability.manage",
+            "doctor_availability.manage_own",
+            require_all=False,
         )
     ),
 ):
+    can_manage_all = await RBACRepository.user_has_permission(
+        db=db,
+        user_id=current_user.id,
+        permission_code="doctor_availability.manage",
+    )
+
     availability = await AppointmentService.create_doctor_availability(
-        db,
-        payload,
+        db=db,
+        payload=payload,
+        actor_id=current_user.id,
+        can_manage_all=can_manage_all,
     )
 
     return {
@@ -786,13 +797,23 @@ async def update_doctor_availability(
     current_user: User = Depends(
         require_permission(
             "doctor_availability.manage",
+            "doctor_availability.manage_own",
+            require_all=False,
         )
     ),
 ):
+    can_manage_all = await RBACRepository.user_has_permission(
+        db=db,
+        user_id=current_user.id,
+        permission_code="doctor_availability.manage",
+    )
+
     availability = await AppointmentService.update_doctor_availability(
-        db,
-        availability_id,
-        payload,
+        db=db,
+        availability_id=availability_id,
+        payload=payload,
+        actor_id=current_user.id,
+        can_manage_all=can_manage_all,
     )
 
     return {
@@ -811,12 +832,22 @@ async def delete_doctor_availability(
     current_user: User = Depends(
         require_permission(
             "doctor_availability.manage",
+            "doctor_availability.manage_own",
+            require_all=False,
         )
     ),
 ):
+    can_manage_all = await RBACRepository.user_has_permission(
+        db=db,
+        user_id=current_user.id,
+        permission_code="doctor_availability.manage",
+    )
+
     await AppointmentService.delete_doctor_availability(
-        db,
-        availability_id,
+        db=db,
+        availability_id=availability_id,
+        actor_id=current_user.id,
+        can_manage_all=can_manage_all,
     )
 
     return {

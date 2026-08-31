@@ -62,5 +62,9 @@ def test_every_route_permission_is_seeded() -> None:
     seeded_permissions = {
         permission.code for permission in ALL_PERMISSIONS
     }
+    mapped_permissions = set().union(
+        *ROLE_PERMISSION_CODES.values()
+    )
 
     assert route_permissions <= seeded_permissions
+    assert route_permissions <= mapped_permissions

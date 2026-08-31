@@ -186,6 +186,7 @@ ADMIN_WEEK_4_PERMISSIONS = {
     "patient_consent.view",
     "patient_consent.download",
     "patient_consent.verify",
+    "patient_consent.revoke",
 }
 
 
@@ -307,6 +308,7 @@ DUTY_DOCTOR_WEEK_5_PERMISSIONS = {
 
     "appointment_slots.view",
     "doctor_availability.view",
+    "doctor_availability.manage_own",
 }
 
 
@@ -594,6 +596,7 @@ RECEPTIONIST_PERMISSIONS = {
     "patient_consent.capture",
     "patient_consent.upload",
     "patient_consent.download",
+    "patient_consent.revoke",
 }
 
 
@@ -1053,6 +1056,7 @@ def validate_configuration() -> None:
         "appointments.complete",
         "consultations.create",
         "consultations.view_own",
+        "doctor_availability.manage_own",
     }
 
     missing_duty_doctor_permissions = (
