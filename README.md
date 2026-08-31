@@ -22,7 +22,7 @@ patient registration, and clinical-record services for the therapy centre.
 4. Seed all seven default roles, permissions, and role mappings:
 
    ```powershell
-   .\venv\Scripts\python.exe -m seeds
+   .\venv\Scripts\python.exe setup_seeds.py
    ```
 
    The command is idempotent and can be run again after deployments. It

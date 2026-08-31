@@ -27,16 +27,18 @@ Duty Doctor Dashboard
 └── Patient History (opened from a consultation)
 ```
 
-Load the authenticated staff member on application startup:
+Load the authenticated staff member's identity on application startup:
 
 ```http
 GET /api/v1/auth/me
 ```
 
-The response contains `id`, `roles` and `permissions`. Store them in the auth
-state and use permission codes to control navigation and action visibility.
-Frontend permission checks improve the user experience, but the frontend must
-still handle backend `403` responses.
+The login response contains `roles` and `permissions`; `/auth/me` currently
+returns profile information but does not repeat those two fields. Persist the
+selected role and permission list from login. After token refresh, the new JWT
+also contains `roles` and `permissions`, which may be decoded for UI state only.
+Backend authorization remains authoritative. Use permission codes to control
+navigation and action visibility, and always handle backend `403` responses.
 
 Important Duty Doctor permissions:
 
@@ -501,7 +503,8 @@ After success:
 2. invalidate the doctor's appointment queue;
 3. make all clinical forms read-only;
 4. hide create/update actions;
-5. show a completion timestamp and success message.
+5. show the appointment completion timestamp when available and a success
+   message.
 
 Completed and cancelled consultations are terminal. The backend returns `409`
 when clinical changes are attempted after either terminal state.
