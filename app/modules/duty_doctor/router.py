@@ -30,6 +30,7 @@ from app.modules.duty_doctor.schemas import (
     ConsultationUpdate,
     DiagnosisCreate,
     DiagnosisResponse,
+    ReferralStatusUpdate,
     SpecialistReferralCreate,
     SpecialistReferralResponse,
     VitalCreate,
@@ -162,7 +163,7 @@ async def get_consultation_by_appointment(
         .where(
             Consultation.appointment_id
             == appointment_id,
-            Consultation.doctor_id
+            Consultation.duty_doctor_id
             == current_user.id,
         )
         .order_by(
@@ -567,6 +568,47 @@ async def create_referral(
             doctor_id=current_user.id,
             data=data,
         )
+    )
+
+
+@consultations_router.patch(
+    "/consultations/{consultation_id}/referrals/{referral_id}/status",
+    response_model=SpecialistReferralResponse,
+)
+async def update_referral_status(
+    consultation_id: int,
+    referral_id: int,
+    data: ReferralStatusUpdate,
+    current_user: User = Depends(
+        require_permission(
+            "specialist_referrals.manage"
+        )
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    await DutyDoctorService.require_own_consultation(
+        db=db,
+        consultation_id=consultation_id,
+        doctor_id=current_user.id,
+    )
+
+    referral = await DutyDoctorRepository.get_referral(
+        db=db,
+        consultation_id=consultation_id,
+        referral_id=referral_id,
+    )
+
+    if referral is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Specialist referral not found",
+        )
+
+    return await DutyDoctorService.update_referral_status(
+        db=db,
+        referral=referral,
+        doctor_id=current_user.id,
+        new_status=data.status,
     )
 
 

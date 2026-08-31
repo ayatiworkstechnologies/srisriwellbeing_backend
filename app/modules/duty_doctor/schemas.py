@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -44,6 +45,8 @@ class ConsultationResponse(BaseModel):
     medical_assessment: str | None
     clinical_observations: str | None
     follow_up_instructions: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 # ============================================================
@@ -100,7 +103,7 @@ class VitalCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_calculated_bmi(self):
-        """Keep calculated BMI within the patient_vitals DECIMAL(5,2)."""
+        """Keep BMI within the patient_vitals DECIMAL(5,2)."""
         if self.height_cm is None or self.weight_kg is None:
             return self
 
@@ -111,7 +114,8 @@ class VitalCreate(BaseModel):
 
         if bmi > Decimal("999.99"):
             raise ValueError(
-                "height_cm and weight_kg produce a BMI outside the supported range"
+                "height_cm and weight_kg produce a BMI "
+                "outside the supported range"
             )
 
         return self
@@ -139,6 +143,8 @@ class VitalResponse(BaseModel):
     bmi: Decimal | None
 
     notes: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 # ============================================================
@@ -167,6 +173,8 @@ class ClinicalNoteResponse(BaseModel):
     doctor_id: int
     note_type: str
     content: str
+    created_at: datetime
+    updated_at: datetime
 
 
 # ============================================================
@@ -206,6 +214,8 @@ class DiagnosisResponse(BaseModel):
     is_primary: bool
 
     notes: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 # ============================================================
@@ -254,6 +264,8 @@ class SpecialistReferralResponse(BaseModel):
     status: str
 
     referral_notes: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 # ============================================================
@@ -279,3 +291,5 @@ class CaseShareResponse(BaseModel):
     share_note: str | None
 
     status: str
+    created_at: datetime
+    updated_at: datetime

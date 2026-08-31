@@ -211,6 +211,22 @@ class DutyDoctorRepository:
             result.scalars().all()
         )
 
+    @staticmethod
+    async def get_referral(
+        db: AsyncSession,
+        consultation_id: int,
+        referral_id: int,
+    ) -> SpecialistReferral | None:
+        result = await db.execute(
+            select(SpecialistReferral).where(
+                SpecialistReferral.id == referral_id,
+                SpecialistReferral.consultation_id
+                == consultation_id,
+            )
+        )
+
+        return result.scalar_one_or_none()
+
     # ========================================================
     # CASE SHARES
     # ========================================================

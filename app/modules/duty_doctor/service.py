@@ -30,9 +30,47 @@ from app.modules.duty_doctor.schemas import (
     VitalCreate,
 )
 from app.modules.patients.models import Patient
+from app.modules.users.model import User
 
 
 class DutyDoctorService:
+
+    @staticmethod
+    def require_active_consultation(
+        consultation: Consultation,
+    ) -> None:
+        if consultation.status not in {
+            "IN_PROGRESS",
+            "REFERRED",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Clinical records cannot be changed when "
+                    f"the consultation is {consultation.status}"
+                ),
+            )
+
+    @staticmethod
+    async def require_active_user(
+        db: AsyncSession,
+        user_id: int,
+        *,
+        detail: str,
+    ) -> None:
+        user_exists = await db.scalar(
+            select(User.id).where(
+                User.id == user_id,
+                User.is_active.is_(True),
+                User.is_deleted.is_(False),
+            )
+        )
+
+        if user_exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            )
 
     @staticmethod
     async def require_own_consultation(
@@ -264,6 +302,10 @@ class DutyDoctorService:
         data: ConsultationUpdate,
     ) -> Consultation:
 
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
+
         old_values = {
             "chief_complaint":
                 consultation.chief_complaint,
@@ -309,6 +351,10 @@ class DutyDoctorService:
         doctor_id: int,
         data: VitalCreate,
     ) -> PatientVital:
+
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
 
         bmi = None
 
@@ -374,6 +420,10 @@ class DutyDoctorService:
         data: ClinicalNoteCreate,
     ) -> ClinicalNote:
 
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
+
         note = ClinicalNote(
             consultation_id=consultation.id,
             patient_id=consultation.patient_id,
@@ -412,6 +462,10 @@ class DutyDoctorService:
         doctor_id: int,
         data: DiagnosisCreate,
     ) -> Diagnosis:
+
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
 
         diagnosis = Diagnosis(
             consultation_id=consultation.id,
@@ -453,6 +507,17 @@ class DutyDoctorService:
         data: SpecialistReferralCreate,
     ) -> SpecialistReferral:
 
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
+
+        if data.specialist_id is not None:
+            await DutyDoctorService.require_active_user(
+                db=db,
+                user_id=data.specialist_id,
+                detail="Specialist not found or inactive",
+            )
+
         referral = SpecialistReferral(
             consultation_id=consultation.id,
             patient_id=consultation.patient_id,
@@ -489,12 +554,68 @@ class DutyDoctorService:
         return referral
 
     @staticmethod
+    async def update_referral_status(
+        db: AsyncSession,
+        referral: SpecialistReferral,
+        doctor_id: int,
+        new_status: str,
+    ) -> SpecialistReferral:
+        allowed_transitions = {
+            "PENDING": {"ACCEPTED", "REJECTED", "CANCELLED"},
+            "ACCEPTED": {"COMPLETED", "CANCELLED"},
+            "REJECTED": set(),
+            "COMPLETED": set(),
+            "CANCELLED": set(),
+        }
+
+        if new_status == referral.status:
+            return referral
+
+        if new_status not in allowed_transitions.get(
+            referral.status,
+            set(),
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Cannot change referral status from "
+                    f"{referral.status} to {new_status}"
+                ),
+            )
+
+        old_status = referral.status
+        referral.status = new_status
+
+        await create_clinical_audit(
+            db=db,
+            user_id=doctor_id,
+            action="STATUS_CHANGE",
+            entity_type="specialist_referral",
+            entity_id=referral.id,
+            description=(
+                "Specialist referral status changed "
+                f"from {old_status} to {new_status}"
+            ),
+            old_values={"status": old_status},
+            new_values={"status": new_status},
+        )
+
+        await db.commit()
+        await db.refresh(referral)
+
+        return referral
+
+    @staticmethod
     async def share_case(
         db: AsyncSession,
         consultation: Consultation,
         doctor_id: int,
         data: CaseShareCreate,
     ) -> CaseShare:
+
+        DutyDoctorService.require_active_consultation(
+            consultation
+        )
 
         if (
             data.shared_with_user_id
@@ -507,6 +628,12 @@ class DutyDoctorService:
                     "with yourself"
                 ),
             )
+
+        await DutyDoctorService.require_active_user(
+            db=db,
+            user_id=data.shared_with_user_id,
+            detail="Case-share recipient not found or inactive",
+        )
 
         case_share = CaseShare(
             consultation_id=consultation.id,
