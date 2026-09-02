@@ -1,9 +1,9 @@
 # Specialist Doctor Treatment Plans — Frontend Implementation Report
 
-**Date:** 2026-08-31  
+**Date:** 2026-09-02
 **Module:** Specialist Doctor — Treatment Plans  
 **Backend:** FastAPI treatment-plan module  
-**Frontend status:** Ready for creator-flow implementation; review-queue backend additions required
+**Frontend status:** API contract ready for creator-flow implementation; production backend release blocked by database migration and dedicated test coverage
 
 ## 1. Executive Summary
 
@@ -18,6 +18,8 @@ The canonical API base is:
 ```
 
 The backend repository does not contain a frontend application. This document is the implementation contract for the frontend team.
+
+Repository verification on 2026-09-02 confirmed that the router is registered, all 31 treatment-plan endpoints are present, the Week 8 permissions are seeded, and the existing architecture/RBAC/seed checks pass. However, no Alembic revision creates the seven treatment-plan tables, and the repository has no dedicated treatment-plan API or service tests. These are release blockers for production even though local development can create tables through `Base.metadata.create_all`.
 
 ## 2. Scope
 
@@ -578,20 +580,24 @@ Required handling:
 
 ## 19. Backend Gaps and Risks
 
-The specialist creator MVP is implementable, but these issues affect a complete multi-specialist workflow:
+The specialist creator frontend is implementable against the documented API contract, but the first two items below block a production-ready backend release:
 
-1. `GET /my` returns only plans created by the current user. It does not return plans shared with the specialist.
-2. There is no reviewer inbox or endpoint listing plans awaiting the current specialist’s review.
-3. Attached reviewers can access a plan only when they already know its ID.
-4. Plan lists provide patient and specialist IDs rather than display names.
-5. List responses provide no total count, search, sorting, or date fields.
-6. Version and status-history responses do not expose timestamps.
-7. The room request accepts `notes`, but the service does not persist them.
-8. Discount and tax are returned but cannot be modified through treatment-plan endpoints.
-9. All specialist doctors receive review, approval, and finalization permissions by default; the backend does not enforce separation of duties between creator, reviewer, and approver.
+1. **Critical — missing database migration.** The models define `treatment_plans`, `treatment_plan_versions`, `treatment_plan_items`, `treatment_plan_therapies`, `treatment_plan_medicines`, `treatment_plan_specialists`, and `treatment_plan_status_history`, but no Alembic revision creates them. Local development may hide this because application startup runs `Base.metadata.create_all`; staging and production rely on Alembic.
+2. **High — no dedicated treatment-plan tests.** There are no Week 8 tests covering endpoint authorization, CRUD operations, pricing, status transitions, version snapshots, collaboration rules, or terminal read-only behavior.
+3. `GET /my` returns only plans created by the current user. It does not return plans shared with the specialist.
+4. There is no reviewer inbox or endpoint listing plans awaiting the current specialist’s review.
+5. Attached reviewers can access a plan only when they already know its ID.
+6. Plan lists provide patient and specialist IDs rather than display names.
+7. List responses provide no total count, search, sorting, or date fields.
+8. Version and status-history responses do not expose timestamps.
+9. The room request accepts `notes`, but the service does not persist them.
+10. Discount and tax are returned but cannot be modified through treatment-plan endpoints.
+11. All specialist doctors receive review, approval, and finalization permissions by default; the backend does not enforce separation of duties between creator, reviewer, and approver.
 
 Recommended backend additions:
 
+- An Alembic revision for every Week 8 treatment-plan table, foreign key, unique constraint, and index.
+- Automated API/service tests for the complete treatment-plan lifecycle and permission boundaries.
 - An accessible/assigned-plans endpoint.
 - A review-queue endpoint.
 - Patient and specialist summary objects in list/detail responses.
@@ -619,10 +625,32 @@ The frontend implementation is complete when an authorized specialist doctor can
 
 ## 21. Delivery Recommendation
 
-Implementation should be delivered in three frontend increments:
+Delivery should begin with backend release hardening, followed by three frontend increments:
 
-1. **Creator MVP:** list, create, overview, therapies, medicines, services, room, pricing, and draft deletion.
-2. **Workflow:** submission, modification, approval, finalization, cancellation, versions, and history.
-3. **Collaboration:** assigned-plan list, reviewer inbox, specialist discovery, and responsibility controls after the required backend endpoints are available.
+1. **Backend release gate:** add the Alembic migration and automated lifecycle/authorization tests.
+2. **Creator MVP:** list, create, overview, therapies, medicines, services, room, pricing, and draft deletion.
+3. **Workflow:** submission, modification, approval, finalization, cancellation, versions, and history.
+4. **Collaboration:** assigned-plan list, reviewer inbox, specialist discovery, and responsibility controls after the required backend endpoints are available.
 
-Overall status: **ready for the specialist creator MVP; complete collaborative review requires backend enhancements.**
+Overall status: **frontend contract ready; production backend release blocked by the missing migration and dedicated tests; complete collaborative review requires additional backend endpoints.**
+
+## 22. Verification Record
+
+Verified against commit `8117a90` on 2026-09-02.
+
+| Check | Result |
+|---|---|
+| Treatment-plan router registered under `/api/v1/treatment-plans` | Pass |
+| CRUD, child-resource, pricing, workflow, version, and history routes present | Pass — 31 endpoints |
+| Week 8 permission definitions and Specialist Doctor assignments present | Pass |
+| Architecture, RBAC permission-name, and seed tests | Pass — 11 tests |
+| Dedicated treatment-plan tests | Fail — none present |
+| Alembic migration for treatment-plan tables | Fail — none present |
+
+Verification command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_architecture.py tests\test_rbac_permission_names.py tests\test_seeds.py -q
+```
+
+Observed result: `11 passed`.
